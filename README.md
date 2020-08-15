@@ -13,4 +13,3 @@ Python Game Cheat Framework
 - Each seperate by DLL e.g. kernel32.py
 - A Wrapper accesses dll directly, e.g. memory.py
 - Windows constants stored in its own module
-- Custom Python exceptions for windows api errors
