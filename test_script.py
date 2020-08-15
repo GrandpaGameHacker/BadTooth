@@ -40,3 +40,6 @@ print("ALLOCATED:", hex(memory))
 windows_api.kernel32.WriteProcessMemory(handle, memory, b'test')
 buffer = windows_api.kernel32.ReadProcessMemory(handle, memory, 4)
 print(buffer)
+array = b"\xcc"
+windows_api.kernel32.WriteProcessMemory(handle, memory, array)
+windows_api.kernel32.CreateRemoteThreadEx(handle, memory, 0)
