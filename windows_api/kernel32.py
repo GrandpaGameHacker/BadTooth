@@ -1,13 +1,9 @@
 from ctypes import *
 from ctypes.wintypes import *
-import winerror
 import winnt
+import winerror
 kernel32 = WinDLL("kernel32", use_last_error=True)
 
-__OpenProcess = windll.kernel32.OpenProcess
-__CloseHandle = windll.kernel32.CloseHandle
-
-# tlhelp32 structs
 MAX_PATH = CHAR * 260
 
 
@@ -25,6 +21,21 @@ class PROCESSENTRY32(Structure):
         ("szExeFile", MAX_PATH)
     ]
 
+
+class MEMORY_BASIC_INFORMATION(Structure):
+    _fields_ = [
+        ("BaseAddress", c_void_p),
+        ("AllocationBase", c_void_p),
+        ("Allocationprotect", DWORD),
+        ("RegionSize", c_size_t),
+        ("State", DWORD),
+        ("Protect", DWORD),
+        ("Type", DWORD)]
+
+
+# internal function definitions
+__OpenProcess = kernel32.OpenProcess
+__CloseHandle = kernel32.CloseHandle
 
 __CreateToolhelp32Snapshot = kernel32.CreateToolhelp32Snapshot
 __CreateToolhelp32Snapshot.argtypes = [DWORD, DWORD]
@@ -48,24 +59,32 @@ __WriteProcessMemory.argtypes = [
     HANDLE, LPVOID, LPCVOID, c_size_t, POINTER(c_size_t)]
 __WriteProcessMemory.restype = BOOL
 
-__VirtualQuery = kernel32.VirtualQueryEx
-__VirtualQuery.argtypes = [HANDLE, LPCVOID, POINTER(Region), c_size_t]
-__VirtualQuery.restype = c_size_t
+__VirtualQueryEx = kernel32.VirtualQueryEx
+__VirtualQueryEx.argtypes = [HANDLE, LPCVOID, POINTER(Region), c_size_t]
+__VirtualQueryEx.restype = c_size_t
 
-__VirtualAlloc = kernel32.VirtualAllocEx
-__VirtualAlloc.argtypes = [HANDLE, LPVOID, c_size_t, DWORD, DWORD]
-__VirtualAlloc.restype = LPVOID
+__VirtualAllocEx = kernel32.VirtualAllocEx
+__VirtualAllocEx.argtypes = [HANDLE, LPVOID, c_size_t, DWORD, DWORD]
+__VirtualAllocEx.restype = LPVOID
 
-__VirtualFree = kernel32.VirtualFreeEx
-__VirtualFree.argtypes = [HANDLE, LPVOID, c_size_t, DWORD]
-__VirtualFree.restype = BOOL
+__VirtualFreeEx = kernel32.VirtualFreeEx
+__VirtualFreeEx.argtypes = [HANDLE, LPVOID, c_size_t, DWORD]
+__VirtualFreeEx.restype = BOOL
+
+__CreateRemoteThreadEx = kernel32.CreateRemoteThreadEx
+__CreateRemoteThreadEx.argtypes = [
+    HANDLE, LPVOID, c_size_t, LPVOID, LPVOID, DWORD, LPVOID, LPDWORD]
+__CreateRemoteThreadEx.restype = HANDLE
+
+# external api
 
 
 def CreateToolhelp32Snapshot(dwFlags, th32ProcessID):
     handle = __CreateToolhelp32Snapshot(dwFlags, th32ProcessID)
     if handle == winerror.ERROR_INVALID_HANDLE:
         print(WinError(get_last_error()))
-    return handle
+    else:
+        return handle
 
 
 def Process32First(hSnapshot):
@@ -118,3 +137,44 @@ def WriteProcessMemory(process_handle, address, buffer):
     if not success:
         print(WinError(get_last_error()))
     return success
+
+
+def VirtualQueryEx(process_handle, address):
+    mem_basic_info = MEMORY_BASIC_INFORMATION()
+    success = __VirtualQueryEx(process_handle, address, byref(
+        mem_basic_info), sizeof(mem_basic_info))
+    if not success:
+        print(WinError(get_last_error()))
+    else:
+        return mem_basic_info
+
+
+def VirtualAllocEx(process_handle, address, size,
+                   allocation_type=winnt.MEM_COMMIT,
+                   protect=winnt.PAGE_EXECUTE_READWRITE):
+    new_memory = __VirtualAllocEx(
+        process_handle, address, size, allocation_type, protect)
+    if not new_memory:
+        print(WinError(get_last_error()))
+    else:
+        return new_memory
+
+
+def VirtualFreeEx(process_handle, address,
+                  size=0, free_type=winnt.MEM_RELEASE):
+    success = __VirtualFreeEx(process_handle, address, size, free_type)
+    if not success:
+        print(WinError(get_last_error()))
+    return success
+
+
+def CreateRemoteThreadEx(process_handle, start_address,
+                         parameter, creation_flags=0):
+    handle = __CreateRemoteThreadEx(process_handle,
+                                    0, 0, start_address,
+                                    byref(DWORD(parameter)),
+                                    creation_flags, 0, DWORD(0))
+    if handle == winerror.ERROR_INVALID_HANDLE:
+        print(WinError(get_last_error()))
+    else:
+        return handle
