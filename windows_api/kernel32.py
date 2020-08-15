@@ -1,9 +1,8 @@
 from ctypes import *
 from ctypes.wintypes import *
-import winnt
-import winerror
+from .winnt_constants import *
+from . import winerror_constants
 kernel32 = WinDLL("kernel32", use_last_error=True)
-
 MAX_PATH = CHAR * 260
 
 
@@ -60,7 +59,8 @@ __WriteProcessMemory.argtypes = [
 __WriteProcessMemory.restype = BOOL
 
 __VirtualQueryEx = kernel32.VirtualQueryEx
-__VirtualQueryEx.argtypes = [HANDLE, LPCVOID, POINTER(Region), c_size_t]
+__VirtualQueryEx.argtypes = [HANDLE, LPCVOID,
+                             POINTER(MEMORY_BASIC_INFORMATION), c_size_t]
 __VirtualQueryEx.restype = c_size_t
 
 __VirtualAllocEx = kernel32.VirtualAllocEx
@@ -81,7 +81,7 @@ __CreateRemoteThreadEx.restype = HANDLE
 
 def CreateToolhelp32Snapshot(dwFlags, th32ProcessID):
     handle = __CreateToolhelp32Snapshot(dwFlags, th32ProcessID)
-    if handle == winerror.ERROR_INVALID_HANDLE:
+    if handle == winerror_constants.ERROR_INVALID_HANDLE:
         print(WinError(get_last_error()))
     else:
         return handle
@@ -99,14 +99,14 @@ def Process32First(hSnapshot):
 
 def Process32Next(hSnapshot, process_entry):
     success = __Process32Next(hSnapshot, byref(process_entry))
-    if not success:
-        print(WinError(get_last_error()))
+    # if not success:
+    # print(WinError(get_last_error()))
     return success
 
 
 def OpenProcess(pid, bInheritHandle=False):
     process_handle = __OpenProcess(
-        winnt.PROCESS_ALL_ACCESS, bInheritHandle, pid)
+        PROCESS_ALL_ACCESS, bInheritHandle, pid)
 
     if process_handle == 0:
         print(WinError(get_last_error()))
@@ -122,7 +122,9 @@ def CloseHandle(handle):
 
 def ReadProcessMemory(process_handle, address, nSize):
     buffer = create_string_buffer(nSize)
-    success = __ReadProcessMemory(process_handle, address, nSize, 0)
+    bytes_read = c_size_t()
+    success = __ReadProcessMemory(
+        process_handle, address, buffer, nSize, byref(bytes_read))
     if not success:
         print(WinError(get_last_error()))
     else:
@@ -133,7 +135,7 @@ def WriteProcessMemory(process_handle, address, buffer):
     c_data = c_char_p(bytes(buffer))
     ptr_c_data = cast(c_data, POINTER(c_char))
     success = __WriteProcessMemory(
-        process_handle, address, ptr_c_data, len(buffer), 0)
+        process_handle, address, ptr_c_data, len(buffer), None)
     if not success:
         print(WinError(get_last_error()))
     return success
@@ -150,8 +152,8 @@ def VirtualQueryEx(process_handle, address):
 
 
 def VirtualAllocEx(process_handle, address, size,
-                   allocation_type=winnt.MEM_COMMIT,
-                   protect=winnt.PAGE_EXECUTE_READWRITE):
+                   allocation_type=MEM_COMMIT,
+                   protect=PAGE_EXECUTE_READWRITE):
     new_memory = __VirtualAllocEx(
         process_handle, address, size, allocation_type, protect)
     if not new_memory:
@@ -161,7 +163,7 @@ def VirtualAllocEx(process_handle, address, size,
 
 
 def VirtualFreeEx(process_handle, address,
-                  size=0, free_type=winnt.MEM_RELEASE):
+                  size=0, free_type=MEM_RELEASE):
     success = __VirtualFreeEx(process_handle, address, size, free_type)
     if not success:
         print(WinError(get_last_error()))
@@ -174,7 +176,7 @@ def CreateRemoteThreadEx(process_handle, start_address,
                                     0, 0, start_address,
                                     byref(DWORD(parameter)),
                                     creation_flags, 0, DWORD(0))
-    if handle == winerror.ERROR_INVALID_HANDLE:
+    if handle == winerror_constants.ERROR_INVALID_HANDLE:
         print(WinError(get_last_error()))
     else:
         return handle
