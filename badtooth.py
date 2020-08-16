@@ -2,6 +2,8 @@ import windows_api.kernel32
 import windows_api.ntdll
 import windows_api.winnt_constants
 
+# Todo - put these funcs into a class?
+
 
 def yield_processes():
     hSnapshot = windows_api.kernel32.CreateToolhelp32Snapshot(
@@ -15,7 +17,7 @@ def yield_processes():
 def get_process_first(process_name):
     for process in yield_processes():
         curr_process_name = process.get_name()
-        if curr_process_name == process_name:
+        if curr_process_name.find(process_name) != -1:
             return process
 
 
@@ -23,7 +25,7 @@ def get_processes(process_name):
     process_list = []
     for process in yield_processes():
         curr_process_name = process.get_name()
-        if curr_process_name == process_name:
+        if curr_process_name.find(process_name) != -1:
             process_list.append(process)
     return process_list
 
@@ -50,16 +52,42 @@ class Process(object):
         return windows_api.kernel32.VirtualAllocEx(self.handle, 0, size)
 
     def alloc_rw(self, size):
-        protect = windows_api.kernel32.PAGE_READWRITE
-        return windows_api.kernel32.VirtualAllocEx(self.handle, 0, size, protect)
+        return windows_api.kernel32.VirtualAllocEx(self.handle, 0, size, protect=windows_api.kernel32.PAGE_READWRITE)
 
     def free(self, address):
         return windows_api.kernel32.VirtualFreeEx(self.handle, address)
 
-    def yield_memory_regions(self):
+    def yield_memory_regions(self, state=None, protect=None, m_type=None):
         system_info = windows_api.kernel32.GetSystemInfo()
         min_address = system_info.lpMinimumApplicationAddress
-        mem_basic_info = windows_api.kernel32.VirtualQueryEx(self.handle, min_address)
+        max_address = system_info.lpMaximumApplicationAddress
+        mem_basic_info = windows_api.kernel32.VirtualQueryEx(
+            self.handle, min_address)
+
+        while mem_basic_info != None:
+            bState = True
+            bProtect = True
+            bType = True
+            if state:
+                bState = mem_basic_info.State == state
+            if protect:
+                bProtect = mem_basic_info.Protect == protect
+            if m_type:
+                bType = mem_basic_info.Type == m_type
+            if bState and bProtect and bType:
+                yield mem_basic_info
+            address = mem_basic_info.BaseAddress + mem_basic_info.RegionSize
+            if address > max_address:
+                break
+            mem_basic_info = windows_api.kernel32.VirtualQueryEx(
+                self.handle, address)
 
     def create_thread(self, address, parameter=0):
         return windows_api.kernel32.CreateRemoteThreadEx(self.handle, address, parameter)
+
+
+process = Process(get_process_first("python").get_pid())
+mem = process.alloc_rwx(1024)
+process.write(mem, b'\xc3')
+process.create_thread(mem)
+input()
