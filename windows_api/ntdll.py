@@ -39,6 +39,39 @@ SE_DELEGATE_SESSION_USER_IMPERSONATE_PRIVILEGE = 36
 
 # undocumented
 ntdll = WinDLL('ntdll', use_last_error=True)
-__AdjustPrivilege__ = ntdll.RtlAdjustPrivilege
-__AdjustPrivilege__.argtypes = [ULONG, BOOLEAN, BOOLEAN, POINTER(BOOLEAN)]
-__AdjustPrivilege__.restype = DWORD  # NTSTATUS
+__AdjustPrivilege = ntdll.RtlAdjustPrivilege
+__AdjustPrivilege.argtypes = [ULONG, BOOLEAN, BOOLEAN, POINTER(BOOLEAN)]
+__AdjustPrivilege.restype = DWORD  # NTSTATUS
+
+
+def NT_SUCCESS(Status):
+    if Status >= 0 and Status <= 0x3FFFFFFF:
+        return True
+    else:
+        return False
+
+
+def NT_INFORMATION(Status):
+    if Status >= 0x40000000 and Status <= 0x7FFFFFFF:
+        return True
+    else:
+        return False
+
+
+def NT_WARNING(Status):
+    if Status >= 0x80000000 and Status <= 0xBFFFFFFF:
+        return True
+    else:
+        return False
+
+
+def NT_ERROR(Status):
+    if Status >= 0xC0000000 and Status <= 0xFFFFFFFF:
+        return True
+    else:
+        return False
+
+
+def AdjustPrivilege(privilege, bool_enable):
+    return __AdjustPrivilege(privilege, bool_enable, 0, c_byte(False))
+    # Returns NTSTATUS_SUCCESS on success, NTSTATUS code on failure.

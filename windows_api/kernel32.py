@@ -3,7 +3,21 @@ from ctypes.wintypes import *
 from .winnt_constants import *
 from . import winerror_constants
 kernel32 = WinDLL("kernel32", use_last_error=True)
-MAX_PATH = CHAR * 260
+
+
+class SYSTEM_INFO(Structure):
+    _fields_ = [
+        ("dwOemId", DWORD),
+        ("dwPageSize", DWORD),
+        ("lpMinimumApplicationAddress", LPVOID),
+        ("lpMaximumApplicationAddress", LPVOID),
+        ("dwActiveProcessorMask", POINTER(DWORD)),
+        ("dwNumberOfProcessors", DWORD),
+        ("dwProcessorType", DWORD),
+        ("dwAllocationGranularity", DWORD),
+        ("wProcessorLevel", WORD),
+        ("wProcessorRevision", WORD),
+    ]
 
 
 class PROCESSENTRY32(Structure):
@@ -17,8 +31,14 @@ class PROCESSENTRY32(Structure):
         ("th32ParentProcessID", DWORD),
         ("pcPriClassBase", LONG),
         ("dwFlags", DWORD),
-        ("szExeFile", MAX_PATH)
+        ("szExeFile", CHAR * 260)  # MAX_PATH
     ]
+
+    def get_name(self):
+        return self.szExeFile.decode("ASCII")
+
+    def get_pid(self):
+        return self.th32ProcessID
 
 
 class MEMORY_BASIC_INFORMATION(Structure):
@@ -33,6 +53,8 @@ class MEMORY_BASIC_INFORMATION(Structure):
 
 
 # internal function definitions
+__GetSystemInfo = kernel32.GetSystemInfo
+
 __OpenProcess = kernel32.OpenProcess
 __CloseHandle = kernel32.CloseHandle
 
@@ -77,6 +99,12 @@ __CreateRemoteThreadEx.argtypes = [
 __CreateRemoteThreadEx.restype = HANDLE
 
 # external api
+
+
+def GetSystemInfo():
+    system_info = SYSTEM_INFO()
+    __GetSystemInfo(byref(system_info))
+    return system_info
 
 
 def CreateToolhelp32Snapshot(dwFlags, th32ProcessID):
