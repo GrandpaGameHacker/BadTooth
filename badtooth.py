@@ -1,16 +1,15 @@
-import windows_api.kernel32
-import windows_api.ntdll
-import windows_api.winnt_constants
-
+from . import kernel32
+from . import ntdll
+from . import winnt_constants
 # Todo - put these funcs into a class?
 
 
 def yield_processes():
-    hSnapshot = windows_api.kernel32.CreateToolhelp32Snapshot(
-        windows_api.winnt_constants.TH32CS_SNAPPROCESS, 0)
-    proc_entry = windows_api.kernel32.Process32First(hSnapshot)
+    hSnapshot = kernel32.CreateToolhelp32Snapshot(
+        winnt_constants.TH32CS_SNAPPROCESS, 0)
+    proc_entry = kernel32.Process32First(hSnapshot)
     yield proc_entry
-    while windows_api.kernel32.Process32Next(hSnapshot, proc_entry):
+    while kernel32.Process32Next(hSnapshot, proc_entry):
         yield proc_entry
 
 
@@ -31,37 +30,37 @@ def get_processes(process_name):
 
 
 def enable_sedebug():
-    windows_api.ntdll.AdjustPrivilege(
-        windows_api.ntdll.SE_DEBUG_PRIVILEGE, True)
+    ntdll.AdjustPrivilege(
+        ntdll.SE_DEBUG_PRIVILEGE, True)
 
 
 class Process(object):
     def __init__(self, process_id):
-        self.handle = windows_api.kernel32.OpenProcess(process_id)
+        self.handle = kernel32.OpenProcess(process_id)
 
     def __del__(self):
-        windows_api.kernel32.CloseHandle(self.handle)
+        kernel32.CloseHandle(self.handle)
 
     def read(self, address, n_bytes):
-        return windows_api.kernel32.ReadProcessMemory(self.handle, address, n_bytes)
+        return kernel32.ReadProcessMemory(self.handle, address, n_bytes)
 
     def write(self, address, buffer):
-        return windows_api.kernel32.WriteProcessMemory(self.handle, address, buffer)
+        return kernel32.WriteProcessMemory(self.handle, address, buffer)
 
     def alloc_rwx(self, size):
-        return windows_api.kernel32.VirtualAllocEx(self.handle, 0, size)
+        return kernel32.VirtualAllocEx(self.handle, 0, size)
 
     def alloc_rw(self, size):
-        return windows_api.kernel32.VirtualAllocEx(self.handle, 0, size, protect=windows_api.kernel32.PAGE_READWRITE)
+        return kernel32.VirtualAllocEx(self.handle, 0, size, protect=kernel32.PAGE_READWRITE)
 
     def free(self, address):
-        return windows_api.kernel32.VirtualFreeEx(self.handle, address)
+        return kernel32.VirtualFreeEx(self.handle, address)
 
     def yield_memory_regions(self, state=None, protect=None, m_type=None):
-        system_info = windows_api.kernel32.GetSystemInfo()
+        system_info = kernel32.GetSystemInfo()
         min_address = system_info.lpMinimumApplicationAddress
         max_address = system_info.lpMaximumApplicationAddress
-        mem_basic_info = windows_api.kernel32.VirtualQueryEx(
+        mem_basic_info = kernel32.VirtualQueryEx(
             self.handle, min_address)
 
         while mem_basic_info != None:
@@ -79,15 +78,8 @@ class Process(object):
             address = mem_basic_info.BaseAddress + mem_basic_info.RegionSize
             if address > max_address:
                 break
-            mem_basic_info = windows_api.kernel32.VirtualQueryEx(
+            mem_basic_info = kernel32.VirtualQueryEx(
                 self.handle, address)
 
     def create_thread(self, address, parameter=0):
-        return windows_api.kernel32.CreateRemoteThreadEx(self.handle, address, parameter)
-
-
-process = Process(get_process_first("python").get_pid())
-mem = process.alloc_rwx(1024)
-process.write(mem, b'\xc3')
-process.create_thread(mem)
-input()
+        return kernel32.CreateRemoteThreadEx(self.handle, address, parameter)
