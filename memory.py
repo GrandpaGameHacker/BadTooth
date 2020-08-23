@@ -1,7 +1,73 @@
 from . import kernel32
 from . import ntdll
 from . import winnt_constants
-# Todo - put these funcs into a class?
+
+
+class Process(object):
+    def __init__(self, process_id):
+        self.handle = kernel32.OpenProcess(process_id)
+        self.patches = {}
+
+    def __del__(self):
+        kernel32.CloseHandle(self.handle)
+
+    def read(self, address, n_bytes):
+        return kernel32.ReadProcessMemory(self.handle, address, n_bytes)
+
+    def write(self, address, buffer):
+        return kernel32.WriteProcessMemory(self.handle, address, buffer)
+
+    def alloc_rwx(self, size):
+        return kernel32.VirtualAllocEx(self.handle, 0, size)
+
+    def alloc_rw(self, size):
+        return kernel32.VirtualAllocEx(self.handle, 0, size,
+                                       protect=kernel32.PAGE_READWRITE)
+
+    def free(self, address):
+        return kernel32.VirtualFreeEx(self.handle, address)
+
+    def yield_memory_regions(self, state=None, protect=None, m_type=None):
+        system_info = kernel32.GetSystemInfo()
+        min_address = system_info.lpMinimumApplicationAddress
+        max_address = system_info.lpMaximumApplicationAddress
+        mem_basic_info = kernel32.VirtualQueryEx(
+            self.handle, min_address)
+
+        while mem_basic_info is not None:
+            bState = True
+            bProtect = True
+            bType = True
+            if state:
+                bState = mem_basic_info.State == state
+            if protect:
+                bProtect = mem_basic_info.Protect == protect
+            if m_type:
+                bType = mem_basic_info.Type == m_type
+            if bState and bProtect and bType:
+                yield mem_basic_info
+            address = mem_basic_info.BaseAddress + mem_basic_info.RegionSize
+            if address > max_address:
+                break
+            mem_basic_info = kernel32.VirtualQueryEx(
+                self.handle, address)
+
+    def create_thread(self, address, parameter=0):
+        return kernel32.CreateRemoteThreadEx(self.handle, address, parameter)
+
+    def add_patch(self, patch_name, address, data):
+        old_data = self.read(address, len(data))
+        self.write(address, data)
+        self.patches[patch_name] = (address, old_data)
+
+    def toggle_patch(self, patch_name):
+        address_i = 0
+        data_i = 1
+        patch_size = len(self.patches[patch_name][data_i])
+        patch_address = self.patches[patch_name][address_i]
+        patch_data = self.read(patch_address, patch_size)
+        self.write(patch_address, self.patches[patch_name][data_i])
+        self.patches[patch_name] = (patch_address, patch_data)
 
 
 def yield_processes():
@@ -32,54 +98,3 @@ def get_processes(process_name):
 def enable_sedebug():
     ntdll.AdjustPrivilege(
         ntdll.SE_DEBUG_PRIVILEGE, True)
-
-
-class Process(object):
-    def __init__(self, process_id):
-        self.handle = kernel32.OpenProcess(process_id)
-
-    def __del__(self):
-        kernel32.CloseHandle(self.handle)
-
-    def read(self, address, n_bytes):
-        return kernel32.ReadProcessMemory(self.handle, address, n_bytes)
-
-    def write(self, address, buffer):
-        return kernel32.WriteProcessMemory(self.handle, address, buffer)
-
-    def alloc_rwx(self, size):
-        return kernel32.VirtualAllocEx(self.handle, 0, size)
-
-    def alloc_rw(self, size):
-        return kernel32.VirtualAllocEx(self.handle, 0, size, protect=kernel32.PAGE_READWRITE)
-
-    def free(self, address):
-        return kernel32.VirtualFreeEx(self.handle, address)
-
-    def yield_memory_regions(self, state=None, protect=None, m_type=None):
-        system_info = kernel32.GetSystemInfo()
-        min_address = system_info.lpMinimumApplicationAddress
-        max_address = system_info.lpMaximumApplicationAddress
-        mem_basic_info = kernel32.VirtualQueryEx(
-            self.handle, min_address)
-
-        while mem_basic_info != None:
-            bState = True
-            bProtect = True
-            bType = True
-            if state:
-                bState = mem_basic_info.State == state
-            if protect:
-                bProtect = mem_basic_info.Protect == protect
-            if m_type:
-                bType = mem_basic_info.Type == m_type
-            if bState and bProtect and bType:
-                yield mem_basic_info
-            address = mem_basic_info.BaseAddress + mem_basic_info.RegionSize
-            if address > max_address:
-                break
-            mem_basic_info = kernel32.VirtualQueryEx(
-                self.handle, address)
-
-    def create_thread(self, address, parameter=0):
-        return kernel32.CreateRemoteThreadEx(self.handle, address, parameter)
