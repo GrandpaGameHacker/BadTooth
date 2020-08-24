@@ -98,6 +98,9 @@ __CreateRemoteThreadEx.argtypes = [
     HANDLE, LPVOID, c_size_t, LPVOID, LPVOID, DWORD, LPVOID, LPDWORD]
 __CreateRemoteThreadEx.restype = HANDLE
 
+__IsWow64Process = kernel32.IsWow64Process
+__IsWow64Process.argtypes = [HANDLE, PBOOL]
+__IsWow64Process.restype = BOOL
 # external api
 
 
@@ -208,3 +211,12 @@ def CreateRemoteThreadEx(process_handle, start_address,
         print(WinError(get_last_error()))
     else:
         return handle
+
+
+def IsWow64Process(handle):
+    result = BOOL(False)
+    if __IsWow64Process(handle, byref(result)):
+        return result
+    else:
+        print(WinError(get_last_error()))
+        return result

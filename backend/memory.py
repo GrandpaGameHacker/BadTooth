@@ -98,3 +98,7 @@ def get_processes(process_name):
 def enable_sedebug():
     ntdll.AdjustPrivilege(
         ntdll.SE_DEBUG_PRIVILEGE, True)
+
+
+def is_process_32bit(handle):
+    return kernel32.IsWow64Process(handle)
