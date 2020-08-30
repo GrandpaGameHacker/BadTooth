@@ -196,6 +196,10 @@ class Process(object):
         return kernel32.CreateRemoteThreadEx(self.handle, address, parameter)
 
     def add_patch(self, patch_name, address, instructions):
+        """
+        Adds a patch to the patches list, applies patch to the process
+        
+        """
         old_data = self.read(address, len(instructions))
         self.write(address, instructions)
         self.patches[patch_name] = (address, old_data)
@@ -291,4 +295,11 @@ def enable_sedebug():
 
 
 def is_process_32bit(handle):
+    """
+    Checks whether target process is running under 32bit mode or 64bit mode
+    To elaborate, it checks whether its running under Wow64.
+    Returns True if process is 32bit, false if it is 64bit
+
+    is_process_32bit(handle: HANDLE) -> result: bool
+    """
     return kernel32.IsWow64Process(handle)
