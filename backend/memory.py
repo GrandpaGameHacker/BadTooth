@@ -15,9 +15,6 @@ class Process(object):
     def __del__(self):
         kernel32.CloseHandle(self.handle)
 
-    def protect(self, address, size):
-        kernel32.Protect
-
     def read(self, address, n_bytes):
         return kernel32.ReadProcessMemory(self.handle, address, n_bytes)
 
@@ -55,6 +52,13 @@ class Process(object):
                 thread_handle = kernel32.OpenThread(thread.get_tid())
                 kernel32.ResumeThread(thread_handle)
                 kernel32.CloseHandle(thread_handle)
+
+    def yield_modules(self):
+        hSnapshot = kernel32.CreateToolhelp32Snapshot(winnt_constants.TH32CS_SNAPMODULE, self.process_id)
+        module_entry = kernel32.Module32First(hSnapshot)
+        yield module_entry
+        while kernel32.Module32Next(hSnapshot, module_entry):
+            yield module_entry
 
     def yield_memory_regions(self, state=None, protect=None, m_type=None):
         system_info = kernel32.GetSystemInfo()
@@ -143,8 +147,10 @@ class Process(object):
 
     def remove_hook(self, hook_name):
         hook_address, old_bytes, target_address = self.hooks[hook_name]
+        self.suspend()
         self.write(hook_address, old_bytes)
         self.free(target_address)
+        self.resume()
         self.hooks.pop(hook_name)
 
 

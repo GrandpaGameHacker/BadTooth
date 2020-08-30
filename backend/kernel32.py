@@ -45,6 +45,36 @@ class PROCESSENTRY32(Structure):
         return self.th32ProcessID
 
 
+class MODULEENTRY32(Structure):
+    _fields_ = [
+        ("dwSize", DWORD),
+        ("th32ModuleID", DWORD),
+        ("th32ProcessID", DWORD),
+        ("GlblcntUsage", DWORD),
+        ("ProccntUsage", DWORD),
+        ("modBaseAddr", PBYTE),
+        ("modBaseSize", DWORD),
+        ("hModule", HMODULE),
+        ("szModule", CHAR * 256),
+        ("szExePath", CHAR * 260)
+    ]
+
+    def get_name(self):
+        return self.szModule.decode("ASCII")
+
+    def get_path(self):
+        return self.szExePath.decode("ASCII")
+
+    def get_base_address(self):
+        return addressof(self.modBaseAddr.contents)
+
+    def get_end_address(self):
+        return addressof(self.modBaseAddr.contents) + self.modBaseSize-1
+
+    def get_size(self):
+        return self.modBaseSize
+
+
 class THREADENTRY32(Structure):
     _fields_ = [
         ("dwSize", DWORD),
@@ -61,7 +91,6 @@ class THREADENTRY32(Structure):
 
     def get_owner_pid(self):
         return self.th32OwnerProcessID
-
 
 
 class MEMORY_BASIC_INFORMATION(Structure):
@@ -105,6 +134,14 @@ __Process32First.restype = BOOL
 __Process32Next = kernel32.Process32Next
 __Process32Next.argtypes = [HANDLE, POINTER(PROCESSENTRY32)]
 __Process32Next.restype = BOOL
+
+__Module32First = kernel32.Module32First
+__Module32First.argtypes = [HANDLE, POINTER(MODULEENTRY32)]
+__Module32First.restype = BOOL
+
+__Module32Next = kernel32.Module32Next
+__Module32Next.argtypes = [HANDLE, POINTER(MODULEENTRY32)]
+__Module32Next.restype = BOOL
 
 __Thread32First = kernel32.Thread32First
 __Thread32First.argtypes = [HANDLE, POINTER(THREADENTRY32)]
@@ -193,6 +230,21 @@ def Thread32First(hSnapshot):
 
 def Thread32Next(hSnapshot, thread_entry):
     success = __Thread32Next(hSnapshot, byref(thread_entry))
+    return success
+
+
+def Module32First(hSnapshot):
+    module_entry = MODULEENTRY32()
+    module_entry.dwSize = sizeof(MODULEENTRY32)
+    success = __Module32First(hSnapshot, byref(module_entry))
+    if not success:
+        report_last_error()
+    else:
+        return module_entry
+
+
+def Module32Next(hSnapshot, module_entry):
+    success = __Module32Next(hSnapshot, byref(module_entry))
     return success
 
 
