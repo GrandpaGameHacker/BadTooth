@@ -17,10 +17,24 @@ def trace(address, size, wait=0.05):
         data0 = target.read(address, size)
         time.sleep(wait)
         data1 = target.read(address, size)
-        compare_bytes(address, data0, data1)
+        result = compare_bytes(address, data0, data1)
+        if result != "":
+            print(result)
 
+
+def ftrace(address, size, file_name, wait=0.05):
+    print(f"Watching {hex(address)}:{hex(size)}")
+    with open(file_name, "w+") as f_output:
+        while True:
+            data0 = target.read(address, size)
+            time.sleep(wait)
+            data1 = target.read(address, size)
+            result = compare_bytes(address, data0, data1)
+            if result != "":
+                f_output.write(result)
 
 def compare_bytes(address, data0, data1):
+    output = ""
     assert len(data0) == len(data1)
     if byte_size == 4:
         unpack_str = "I" * (len(data0) // byte_size)
@@ -31,14 +45,15 @@ def compare_bytes(address, data0, data1):
     c_addr = 0
     for item0, item1 in zip(unpack0, unpack1):
         if item0 != item1:
-            print(hex(address) + " + " + hex(c_addr), "\n",
-                  hex(item0)[2:].zfill(byte_size * 2) + "\n",
-                  hex(item1)[2:].zfill(byte_size * 2) + "\n\n")
-        c_addr = c_addr + 4
+            output = output + hex(address) + " + " + hex(c_addr) + " : "
+            output = output + hex(item0)[2:].zfill(byte_size * 2) + " -->"
+            output = output + hex(item1)[2:].zfill(byte_size * 2) + "\n\n"
+        c_addr = c_addr + byte_size
+    return output
 
 
 if len(sys.argv) != 2:
-    print("ScriptError: wrong arguments\n")
+    print("ScriptError: wrong arguments\nExpected process_name")
     quit()
 process_name = sys.argv[1]
 target = Process(get_process_first(process_name).get_pid())

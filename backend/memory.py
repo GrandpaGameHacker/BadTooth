@@ -2,14 +2,21 @@ from . import kernel32
 from . import ntdll
 from . import winnt_constants
 
+import struct
+
 
 class Process(object):
     def __init__(self, process_id):
+        self.process_id = process_id
         self.handle = kernel32.OpenProcess(process_id)
         self.patches = {}
+        self.hooks = {}
 
     def __del__(self):
         kernel32.CloseHandle(self.handle)
+
+    def protect(self, address, size):
+        kernel32.Protect
 
     def read(self, address, n_bytes):
         return kernel32.ReadProcessMemory(self.handle, address, n_bytes)
@@ -26,6 +33,28 @@ class Process(object):
 
     def free(self, address):
         return kernel32.VirtualFreeEx(self.handle, address)
+
+    def yield_threads(self):
+        hSnapshot = kernel32.CreateToolhelp32Snapshot(
+            winnt_constants.TH32CS_SNAPTHREAD, 0)
+        thread_entry = kernel32.Thread32First(hSnapshot)
+        yield thread_entry
+        while kernel32.Thread32Next(hSnapshot, thread_entry):
+            yield thread_entry
+
+    def suspend(self):
+        for thread in self.yield_threads():
+            if thread.get_owner_pid() == self.process_id:
+                thread_handle = kernel32.OpenThread(thread.get_tid())
+                kernel32.SuspendThread(thread_handle)
+                kernel32.CloseHandle(thread_handle)
+
+    def resume(self):
+        for thread in self.yield_threads():
+            if thread.get_owner_pid() == self.process_id:
+                thread_handle = kernel32.OpenThread(thread.get_tid())
+                kernel32.ResumeThread(thread_handle)
+                kernel32.CloseHandle(thread_handle)
 
     def yield_memory_regions(self, state=None, protect=None, m_type=None):
         system_info = kernel32.GetSystemInfo()
@@ -55,19 +84,68 @@ class Process(object):
     def create_thread(self, address, parameter=0):
         return kernel32.CreateRemoteThreadEx(self.handle, address, parameter)
 
-    def add_patch(self, patch_name, address, data):
-        old_data = self.read(address, len(data))
-        self.write(address, data)
+    def add_patch(self, patch_name, address, instructions):
+        old_data = self.read(address, len(instructions))
+        self.write(address, instructions)
         self.patches[patch_name] = (address, old_data)
 
     def toggle_patch(self, patch_name):
         address_i = 0
-        data_i = 1
-        patch_size = len(self.patches[patch_name][data_i])
+        instructions_i = 1
+        patch_size = len(self.patches[patch_name][instructions_i])
         patch_address = self.patches[patch_name][address_i]
-        patch_data = self.read(patch_address, patch_size)
-        self.write(patch_address, self.patches[patch_name][data_i])
-        self.patches[patch_name] = (patch_address, patch_data)
+        patch_instructions = self.read(patch_address, patch_size)
+        self.write(patch_address, self.patches[patch_name][instructions_i])
+        self.patches[patch_name] = (patch_address, patch_instructions)
+
+    def detour_hook(self, target_address, hook_address, instr_length):
+        if is_process_32bit(self.handle):
+            nops = b''
+            if instr_length > 5:
+                nops = b'\x90' * (instr_length - 5)
+            old_protect = kernel32.VirtualProtectEx(
+                self.handle, hook_address, instr_length, kernel32.PAGE_EXECUTE_READWRITE)
+            hook_relative = target_address - hook_address - 5
+            hook = b'\xE9' + struct.pack("i", hook_relative) + nops
+            old_bytes = self.read(hook_address, instr_length)
+            self.write(hook_address, hook)
+            kernel32.VirtualProtectEx(
+                self.handle, hook_address, instr_length, old_protect)
+            return old_bytes
+        else:
+            nops = b''
+            if instr_length > 14:
+                nops = b'\x90' * (instr_length - 14)
+            old_protect = kernel32.VirtualProtectEx(
+                self.handle, hook_address, instr_length, kernel32.PAGE_EXECUTE_READWRITE)
+            hook = b'\xFF\x25\x00\x00\x00\x00' + \
+                struct.pack("Q", target_address) + nops
+            old_bytes = self.read(hook_address, instr_length)
+            self.write(hook_address, hook)
+            kernel32.VirtualProtectEx(
+                self.handle, hook_address, instr_length, old_protect)
+            return old_bytes
+
+    def add_hook(self, hook_name, hook_address, hook_instr_len, new_code):
+        self.suspend()
+        target_address = self.alloc_rwx(len(new_code))
+        if is_process_32bit(self.handle):
+            hook_relative = hook_address - (target_address + len(new_code))
+            new_code = new_code + b'\xE9' + struct.pack("i", hook_relative)
+        else:
+            new_code = new_code + b'\xFF\x25\x00\x00\x00\x00' + \
+                struct.pack("Q", hook_address + hook_instr_len)
+        self.write(target_address, new_code)
+        old_bytes = self.detour_hook(
+            target_address, hook_address, hook_instr_len)
+        self.resume()
+        self.hooks[hook_name] = (hook_address, old_bytes, target_address)
+
+    def remove_hook(self, hook_name):
+        hook_address, old_bytes, target_address = self.hooks[hook_name]
+        self.write(hook_address, old_bytes)
+        self.free(target_address)
+        self.hooks.pop(hook_name)
 
 
 def yield_processes():
