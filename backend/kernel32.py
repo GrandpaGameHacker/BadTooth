@@ -69,7 +69,7 @@ class MODULEENTRY32(Structure):
         return addressof(self.modBaseAddr.contents)
 
     def get_end_address(self):
-        return addressof(self.modBaseAddr.contents) + self.modBaseSize-1
+        return addressof(self.modBaseAddr.contents) + self.modBaseSize - 1
 
     def get_size(self):
         return self.modBaseSize
@@ -106,6 +106,14 @@ class MEMORY_BASIC_INFORMATION(Structure):
 
 # internal function definitions
 __GetSystemInfo = kernel32.GetSystemInfo
+
+__GetProcAddress = kernel32.GetProcAddress
+__GetProcAddress.argtypes = [HMODULE, LPCSTR]
+__GetProcAddress.restype = c_void_p
+
+__GetModuleHandle = kernel32.GetModuleHandleA
+__GetModuleHandle.argtypes = [LPCSTR]
+__GetModuleHandle.restype = HMODULE
 
 __OpenProcess = kernel32.OpenProcess
 
@@ -193,6 +201,24 @@ def GetSystemInfo():
     system_info = SYSTEM_INFO()
     __GetSystemInfo(byref(system_info))
     return system_info
+
+
+def GetModuleHandle(module):
+    c_data = c_char_p(bytes(module, "ASCII"))
+    handle = __GetModuleHandle(c_data)
+    if handle == winerror_constants.ERROR_INVALID_HANDLE:
+        report_last_error()
+    else:
+        return handle
+
+
+def GetProcAddress(module_handle, proc_name):
+    c_data = c_char_p(bytes(proc_name, "ASCII"))
+    address = __GetProcAddress(module_handle, c_data)
+    if address == 0:
+        report_last_error()
+    else:
+        return address
 
 
 def CreateToolhelp32Snapshot(dwFlags, th32ProcessID):
@@ -354,7 +380,7 @@ def CreateRemoteThreadEx(process_handle, start_address,
                          parameter, creation_flags=0):
     handle = __CreateRemoteThreadEx(process_handle,
                                     0, 0, start_address,
-                                    byref(DWORD(parameter)),
+                                    c_void_p(parameter),
                                     creation_flags, 0, DWORD(0))
     if handle == winerror_constants.ERROR_INVALID_HANDLE:
         report_last_error()

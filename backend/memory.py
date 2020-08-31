@@ -199,12 +199,26 @@ class Process(object):
         """
         Adds a patch to the patches list, applies patch to the process
         
+        Process.add_patch(patch_name, address, instructions)
+
+        The patch is registered with a dictionary Process.patches
+        using the supplied patch_name argument
+
+        The instructions argument is a bytearray of x86/64 assembly code
+        that is to be written to the specified address/location in the target code.
+
+        Use Process.toggle_patch(patch_name) to enable or disable the patch
         """
         old_data = self.read(address, len(instructions))
         self.write(address, instructions)
         self.patches[patch_name] = (address, old_data)
 
     def toggle_patch(self, patch_name):
+        """
+        Toggles a patch on or off
+        This function swaps the bytes between the original code
+        and the new code (instructions argument in Process.add_patch)
+        """
         address, old_data = self.patches[patch_name]
         patch_size = len(old_data)
         patch_address = address
@@ -213,6 +227,10 @@ class Process(object):
         self.patches[patch_name] = (patch_address, patch_instructions)
 
     def detour_hook(self, target_address, hook_address, instr_length):
+        """
+        Used internally, auto generates jmp instructions for a hook
+        Does not generate return jmp/ret to original code
+        """
         if is_process_32bit(self.handle):
             nops = b''
             if instr_length > 5:
@@ -262,6 +280,22 @@ class Process(object):
         self.free(target_address)
         self.resume()
         self.hooks.pop(hook_name)
+
+    def inject_dll(self, dll_path):
+        hmod = kernel32.GetModuleHandle("kernel32.dll")
+        loadlib = kernel32.GetProcAddress(hmod, "LoadLibraryA")
+        path_internal = self.alloc_rw(len(dll_path))
+        self.write(path_internal, bytes(dll_path, "ASCII"))
+        self.create_thread(loadlib, parameter = path_internal)
+
+    # def inject_dll_stealth(dll_path):
+    #     with open(dll_path, 'rb') as dllfile:
+    #         inject_data = dllfile.read()
+    #         dll_loc = self.alloc_rwx(len(inject_data))
+    #         self.write(dll_loc, inject_data)
+    # ... write dll to memory and execute ...
+    # ... need to parse PE of dll to get entrypoint ...
+
 
 
 def yield_processes():
