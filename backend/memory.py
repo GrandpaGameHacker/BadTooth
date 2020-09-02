@@ -35,6 +35,16 @@ class Process(object):
         if 'handle' in dir(self):
             kernel32.CloseHandle(self.handle)
 
+    def is_process_32bit(self):
+        """
+        Checks whether target process is running under 32bit mode or 64bit mode
+        To elaborate, it checks whether its running under Wow64.
+        Returns True if process is 32bit, false if it is 64bit
+
+        Process.is_process_32bit() -> result: bool
+        """
+        return kernel32.IsWow64Process(self.handle)
+
     def read(self, address, n_bytes):
         """
         Read specified bytes from the target process
@@ -241,10 +251,10 @@ class Process(object):
 
     def detour_hook(self, target_address, hook_address, instr_length):
         """
-        Used internally, auto generates jmp instructions for a hook
+        Used internally, auto generates and writes jmp instructions for a hook
         Does not generate return jmp/ret to original code
         """
-        if is_process_32bit(self.handle):
+        if self.is_process_32bit():
             nops = b''
             if instr_length > 5:
                 nops = b'\x90' * (instr_length - 5)
@@ -274,7 +284,7 @@ class Process(object):
     def add_hook(self, hook_name, hook_address, hook_instr_len, new_code):
         self.suspend()
         target_address = self.alloc_rwx(len(new_code))
-        if is_process_32bit(self.handle):
+        if self.is_process_32bit():
             hook_relative = hook_address - (target_address + len(new_code))
             new_code = new_code + b'\xE9' + struct.pack("i", hook_relative)
         else:
@@ -294,21 +304,12 @@ class Process(object):
         self.resume()
         self.hooks.pop(hook_name)
 
-    def inject_dll(self, dll_path):
+    def basic_inject_dll(self, dll_path):
         hmod = kernel32.GetModuleHandle("kernel32.dll")
         loadlib = kernel32.GetProcAddress(hmod, "LoadLibraryA")
         path_internal = self.alloc_rw(len(dll_path))
         self.write(path_internal, bytes(dll_path, "ASCII"))
         self.create_thread(loadlib, parameter = path_internal)
-
-    # def inject_dll_stealth(dll_path):
-    #     with open(dll_path, 'rb') as dllfile:
-    #         inject_data = dllfile.read()
-    #         dll_loc = self.alloc_rwx(len(inject_data))
-    #         self.write(dll_loc, inject_data)
-    # ... write dll to memory and execute ...
-    # ... need to parse PE of dll to get entrypoint ...
-
 
 
 def yield_processes():
@@ -339,14 +340,3 @@ def get_processes(process_name):
 def enable_sedebug():
     ntdll.AdjustPrivilege(
         ntdll.SE_DEBUG_PRIVILEGE, True)
-
-
-def is_process_32bit(handle):
-    """
-    Checks whether target process is running under 32bit mode or 64bit mode
-    To elaborate, it checks whether its running under Wow64.
-    Returns True if process is 32bit, false if it is 64bit
-
-    is_process_32bit(handle: HANDLE) -> result: bool
-    """
-    return kernel32.IsWow64Process(handle)

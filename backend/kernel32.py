@@ -2,6 +2,7 @@ from ctypes import *
 from ctypes.wintypes import *
 from .winnt_constants import *
 from . import winerror_constants
+
 kernel32 = WinDLL("kernel32", use_last_error=True)
 
 
