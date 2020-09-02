@@ -58,7 +58,7 @@ if len(sys.argv) != 2:
 process_name = sys.argv[1]
 target = Process(get_process_first(process_name).get_pid())
 byte_size = 8
-if is_process_32bit(target.handle):
+if target.is_process_32bit():
     byte_size = 4
 code.interact(banner=f"Memory Tracer Tool v{__version__}", local=locals())
 
