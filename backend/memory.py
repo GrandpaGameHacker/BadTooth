@@ -35,13 +35,13 @@ class Process(object):
         if 'handle' in dir(self):
             kernel32.CloseHandle(self.handle)
 
-    def is_process_32bit(self):
+    def is_32bit(self):
         """
         Checks whether target process is running under 32bit mode or 64bit mode
         To elaborate, it checks whether its running under Wow64.
         Returns True if process is 32bit, false if it is 64bit
 
-        Process.is_process_32bit() -> result: bool
+        Process.is_32bit() -> result: bool
         """
         return kernel32.IsWow64Process(self.handle)
 
@@ -254,7 +254,7 @@ class Process(object):
         Used internally, auto generates and writes jmp instructions for a hook
         Does not generate return jmp/ret to original code
         """
-        if self.is_process_32bit():
+        if self.is_32bit():
             nops = b''
             if instr_length > 5:
                 nops = b'\x90' * (instr_length - 5)
@@ -284,7 +284,7 @@ class Process(object):
     def add_hook(self, hook_name, hook_address, hook_instr_len, new_code):
         self.suspend()
         target_address = self.alloc_rwx(len(new_code))
-        if self.is_process_32bit():
+        if self.is_32bit():
             hook_relative = hook_address - (target_address + len(new_code))
             new_code = new_code + b'\xE9' + struct.pack("i", hook_relative)
         else:

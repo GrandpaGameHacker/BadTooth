@@ -33,6 +33,7 @@ def ftrace(address, size, file_name, wait=0.05):
             if result != "":
                 f_output.write(result)
 
+
 def compare_bytes(address, data0, data1):
     output = ""
     assert len(data0) == len(data1)
@@ -58,7 +59,7 @@ if len(sys.argv) != 2:
 process_name = sys.argv[1]
 target = Process(get_process_first(process_name).get_pid())
 byte_size = 8
-if target.is_process_32bit():
+if target.is_32bit():
     byte_size = 4
 code.interact(banner=f"Memory Tracer Tool v{__version__}", local=locals())
 
