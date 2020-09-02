@@ -32,7 +32,8 @@ class Process(object):
         """
         Calls Kernel32.dll->CloseHandle(self.handle) upon destruction
         """
-        kernel32.CloseHandle(self.handle)
+        if 'handle' in dir(self):
+            kernel32.CloseHandle(self.handle)
 
     def read(self, address, n_bytes):
         """
@@ -57,6 +58,9 @@ class Process(object):
         buffer is the bytes you want to write to the process
         """
         return kernel32.WriteProcessMemory(self.handle, address, buffer)
+
+    def protect(self, address, size, protection):
+        return kernel32.VirtualProtectEx(self.handle, address, size, protection)
 
     def alloc_rwx(self, size):
         """
@@ -139,16 +143,19 @@ class Process(object):
         while kernel32.Module32Next(hSnapshot, module_entry):
             yield module_entry
 
-    def yield_memory_regions(self, state=None, protect=None, m_type=None):
+    def yield_memory_regions(self, min_address = None, max_address = None, state=None, protect=None, m_type=None):
         """
         Yields memory regions one by one using a generator object
         Each region is a MEMORY_BASIC_INFORMATION structure object
         Regions belong to the target process
         
-        Process.yield_regions(state=None, protect=None, m_type = None) -> Generator(kernel32.MEMORY_BASIC_INFORMATION)]
+        Process.yield_regions(min_address = None, max_address = None, state=None, protect=None, m_type = None) -> Generator(kernel32.MEMORY_BASIC_INFORMATION)]
 
-        Each overload (state, protect, m_type) allows you to filter for certain
-        types of memory, you can have any combination of the three filters.
+        Each overload (min_address, max_address, state, protect, m_type) allows you to filter for certain
+        types of memory, you can have any combination of the five filters.
+
+        min_address and max_address can be used to filter for a range of addresses, for example
+        the memory regions inside a module
 
         state can be -> MEM_COMMIT, MEM_FREE, MEM_RESERVE
         
@@ -162,22 +169,28 @@ class Process(object):
 
         """
         system_info = kernel32.GetSystemInfo()
-        min_address = system_info.lpMinimumApplicationAddress
-        max_address = system_info.lpMaximumApplicationAddress
+        sysmin_address = system_info.lpMinimumApplicationAddress
+        sysmax_address = system_info.lpMaximumApplicationAddress
         mem_basic_info = kernel32.VirtualQueryEx(
-            self.handle, min_address)
+            self.handle, sysmin_address)
 
         while mem_basic_info is not None:
+            bMinAddr = True
+            bMaxAddr = True
             bState = True
             bProtect = True
             bType = True
+            if min_address:
+                bMinAddr = mem_basic_info.BaseAddress >= min_address
+            if max_address:
+                bMaxAddr = (mem_basic_info.BaseAddress + mem_basic_info.RegionSize) < max_address
             if state:
                 bState = mem_basic_info.State == state
             if protect:
                 bProtect = mem_basic_info.Protect == protect
             if m_type:
                 bType = mem_basic_info.Type == m_type
-            if bState and bProtect and bType:
+            if bState and bProtect and bType and bMinAddr and bMaxAddr:
                 yield mem_basic_info
             address = mem_basic_info.BaseAddress + mem_basic_info.RegionSize
             if address > max_address:

@@ -103,6 +103,21 @@ class MEMORY_BASIC_INFORMATION(Structure):
         ("Protect", DWORD),
         ("Type", DWORD)]
 
+    def get_protect(self):
+        protections = {
+            PAGE_READONLY: "r",
+            PAGE_READWRITE: "rw",
+            PAGE_WRITECOPY: "wc",
+            PAGE_WRITECOMBINE: "wc+",
+            PAGE_EXECUTE: "x",
+            PAGE_EXECUTE_READ: "rx",
+            PAGE_EXECUTE_READWRITE: "rwx",
+            PAGE_EXECUTE_WRITECOPY: "wcx",
+            PAGE_NOCACHE: "nc",
+            PAGE_NOACCESS: "n"
+        }
+        return protections[self.Protect]
+
 
 # internal function definitions
 __GetSystemInfo = kernel32.GetSystemInfo
