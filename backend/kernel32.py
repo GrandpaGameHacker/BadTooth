@@ -2,7 +2,7 @@ from ctypes import *
 from ctypes.wintypes import *
 from .winnt_constants import *
 from . import winerror_constants
-
+QWORD = c_longlong
 kernel32 = WinDLL("kernel32", use_last_error=True)
 
 
@@ -120,6 +120,83 @@ class MEMORY_BASIC_INFORMATION(Structure):
         return protections[self.Protect]
 
 
+class FLOATING_SAVE_AREA(Structure):
+    _fields_ = [
+        ("ControlWord", ULONG),
+        ("StatusWord", ULONG),
+        ("TagWord", ULONG),
+        ("ErrorOffset", ULONG),
+        ("ErrorSelector", ULONG),
+        ("DataOffset", ULONG),
+        ("DataSelector", ULONG),
+        ("RegisterArea", CHAR * 80),
+        ("Cr0NpxState", ULONG)
+    ]
+
+class CONTEXT64(Structure):
+    _fields_ = [
+        ("P1Home", QWORD),
+        ("P2Home", QWORD),
+        ("P3Home", QWORD),
+        ("P4Home", QWORD),
+        ("P5Home", QWORD),
+        ("P6Home", QWORD),
+        ("ContextFlags", DWORD),
+        ("MxCsr", DWORD),
+        ("SegCs", WORD),
+        ("SegDs", WORD),
+        ("SegEs", WORD),
+        ("SegGs", WORD),
+        ("SegSs", WORD),
+        ("Dr0", QWORD),
+        ("Dr1", QWORD),
+        ("Dr2", QWORD),
+        ("Dr3", QWORD),
+        ("Dr6", QWORD),
+        ("Dr7", QWORD),
+        ("Rax", QWORD),
+        ("Rcx", QWORD),
+        ("Rdx", QWORD),
+        ("Rbx", QWORD),
+        ("Rsp", QWORD),
+        ("Rbp", QWORD),
+        ("Rsi", QWORD),
+        ("Rdi", QWORD),
+        ("R8", QWORD),
+        ("R9", QWORD),
+        ("R10", QWORD),
+        ("R11", QWORD),
+        ("R12", QWORD),
+        ("R13", QWORD),
+        ("R14", QWORD),
+        ("R15", QWORD),
+        ("Rip", QWORD),
+        ("Xmm0", c_float * 4),
+        ("Xmm1", c_float * 4),
+        ("Xmm2", c_float * 4),
+        ("Xmm3", c_float * 4),
+        ("Xmm4", c_float * 4),
+        ("Xmm5", c_float * 4),
+        ("Xmm6", c_float * 4),
+        ("Xmm7", c_float * 4),
+        ("Xmm8", c_float * 4),
+        ("Xmm9", c_float * 4),
+        ("Xmm10", c_float * 4),
+        ("Xmm11", c_float * 4),
+        ("Xmm12", c_float * 4),
+        ("Xmm13", c_float * 4),
+        ("Xmm14", c_float * 4),
+        ("Xmm15", c_float * 4),
+        ("VectorRegister", c_float * 104),
+        ("VectorControl", QWORD),
+        ("DebugControl", QWORD),
+        ("LastBranchToRip", QWORD),
+        ("LastBranchFromRip", QWORD),
+        ("LastExceptionToRip", QWORD),
+        ("LastExceptionFromRip", QWORD)
+    ]
+
+
 # internal function definitions
 __GetSystemInfo = kernel32.GetSystemInfo
 
@@ -144,6 +221,10 @@ __SuspendThread.restype = DWORD
 __ResumeThread = kernel32.ResumeThread
 __ResumeThread.argtypes = [HANDLE]
 __ResumeThread.restype = DWORD
+
+__GetThreadContext = kernel32.GetThreadContext
+__GetThreadContext.argtypes = [HANDLE, POINTER(CONTEXT64)]
+__GetThreadContext.restype = BOOL
 
 __CloseHandle = kernel32.CloseHandle
 
@@ -323,6 +404,16 @@ def ResumeThread(thread_handle):
     else:
         report_last_error()
         return False
+
+
+def GetThreadContext(thread_handle):
+    thread_context = CONTEXT64()
+    thread_context.ContextFlags = CONTEXT_FULL
+    result = __GetThreadContext(thread_handle, byref(thread_context))
+    if result:
+        return thread_context
+    else:
+        report_last_error()
 
 
 def CloseHandle(handle):

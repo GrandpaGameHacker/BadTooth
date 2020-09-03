@@ -111,9 +111,11 @@ class Process(object):
         hSnapshot = kernel32.CreateToolhelp32Snapshot(
             winnt_constants.TH32CS_SNAPTHREAD, 0)
         thread_entry = kernel32.Thread32First(hSnapshot)
-        yield thread_entry
-        while kernel32.Thread32Next(hSnapshot, thread_entry):
+        if thread_entry.get_owner_pid() == self.process_id:
             yield thread_entry
+        while kernel32.Thread32Next(hSnapshot, thread_entry):
+            if thread_entry.get_owner_pid() == self.process_id:
+                yield thread_entry
 
     def suspend(self):
         """
@@ -122,10 +124,9 @@ class Process(object):
         Process.suspend() -> None
         """
         for thread in self.yield_threads():
-            if thread.get_owner_pid() == self.process_id:
-                thread_handle = kernel32.OpenThread(thread.get_tid())
-                kernel32.SuspendThread(thread_handle)
-                kernel32.CloseHandle(thread_handle)
+            thread_handle = kernel32.OpenThread(thread.get_tid())
+            kernel32.SuspendThread(thread_handle)
+            kernel32.CloseHandle(thread_handle)
 
     def resume(self):
         """
@@ -134,10 +135,9 @@ class Process(object):
         Process.suspend() -> None
         """
         for thread in self.yield_threads():
-            if thread.get_owner_pid() == self.process_id:
-                thread_handle = kernel32.OpenThread(thread.get_tid())
-                kernel32.ResumeThread(thread_handle)
-                kernel32.CloseHandle(thread_handle)
+            thread_handle = kernel32.OpenThread(thread.get_tid())
+            kernel32.ResumeThread(thread_handle)
+            kernel32.CloseHandle(thread_handle)
 
     def yield_modules(self):
         """
@@ -323,16 +323,16 @@ def yield_processes():
 
 def get_process_first(process_name):
     for process in yield_processes():
-        curr_process_name = process.get_name()
-        if curr_process_name.find(process_name) != -1:
+        curr_process_name = process.get_name().lower()
+        if curr_process_name.find(process_name.lower()) != -1:
             return process
 
 
 def get_processes(process_name):
     process_list = []
     for process in yield_processes():
-        curr_process_name = process.get_name()
-        if curr_process_name.find(process_name) != -1:
+        curr_process_name = process.get_name().lower()
+        if curr_process_name.find(process_name.lower()) != -1:
             process_list.append(process)
     return process_list
 
