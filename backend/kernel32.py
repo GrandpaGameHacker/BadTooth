@@ -72,6 +72,10 @@ class MODULEENTRY32(Structure):
     def get_end_address(self):
         return addressof(self.modBaseAddr.contents) + self.modBaseSize - 1
 
+    def get_memory_range(self):
+        mem_range = (self.get_base_address(), self.get_end_address())
+        return mem_range
+
     def get_size(self):
         return self.modBaseSize
 
@@ -104,6 +108,16 @@ class MEMORY_BASIC_INFORMATION(Structure):
         ("Protect", DWORD),
         ("Type", DWORD)]
 
+    def get_base_address(self):
+        return self.BaseAddress
+
+    def get_end_address(self):
+        return self.BaseAddress + self.RegionSize
+
+    def get_memory_range(self):
+        mem_range = (self.get_base_address(), self.get_end_address())
+        return mem_range
+
     def get_protect(self):
         protections = {
             PAGE_READONLY: "r",
@@ -133,6 +147,7 @@ class FLOATING_SAVE_AREA(Structure):
         ("Cr0NpxState", ULONG)
     ]
 
+# intel64
 class CONTEXT64(Structure):
     _fields_ = [
         ("P1Home", QWORD),
@@ -171,7 +186,7 @@ class CONTEXT64(Structure):
         ("R14", QWORD),
         ("R15", QWORD),
         ("Rip", QWORD),
-        ("Xmm0", c_float * 4),
+        ("Xmm0", c_float * 4), # ugh
         ("Xmm1", c_float * 4),
         ("Xmm2", c_float * 4),
         ("Xmm3", c_float * 4),
