@@ -14,6 +14,7 @@ class Process(object):
      | to the process specified by process_id
      | Process will automatically close the handle upon destruction.
     """
+
     def __init__(self, process_id):
         """
         Process(process_id) -> Process
@@ -57,6 +58,23 @@ class Process(object):
         Will fail if memory range crosses into a PAGE_NOACCESS memory region etc.
         """
         return kernel32.ReadProcessMemory(self.handle, address, n_bytes)
+
+    def read_string(self, address):
+        """
+        Read an ASCII string from target process
+
+        Process.read_string(address) -> string: str
+        """
+        string = ""
+        i = 0
+        while True:
+            char = self.read(address + i, 1)[0]
+            if 0x20 <= char < 0x7f:
+                string = string + chr(char)
+                i = i + 1
+            elif char == 0:
+                return string
+        return string
 
     def write(self, address, buffer):
         """
@@ -105,7 +123,7 @@ class Process(object):
         Yields threads one by one using a generator object
         Each thread is a THREADENTRY32 structure object
         Threads belong to the target process
-        
+
         Process.yield_threads() -> Generator(kernel32.THREADENTRY32)
         """
         hSnapshot = kernel32.CreateToolhelp32Snapshot(
@@ -144,21 +162,22 @@ class Process(object):
         Yields modules one by one using a generator object
         Each module is a MODULEENTRY32 structure object
         Modules belong to the target process
-        
+
         Process.yield_modules() -> Generator(kernel32.MODULEENTRY32)
         """
-        hSnapshot = kernel32.CreateToolhelp32Snapshot(winnt_constants.TH32CS_SNAPMODULE, self.process_id)
+        hSnapshot = kernel32.CreateToolhelp32Snapshot(
+            winnt_constants.TH32CS_SNAPMODULE, self.process_id)
         module_entry = kernel32.Module32First(hSnapshot)
         yield module_entry
         while kernel32.Module32Next(hSnapshot, module_entry):
             yield module_entry
 
-    def yield_memory_regions(self, min_address = None, max_address = None, state=None, protect=None, m_type=None):
+    def yield_memory_regions(self, min_address=None, max_address=None, state=None, protect=None, m_type=None):
         """
         Yields memory regions one by one using a generator object
         Each region is a MEMORY_BASIC_INFORMATION structure object
         Regions belong to the target process
-        
+
         Process.yield_regions(min_address = None, max_address = None, state=None, protect=None, m_type = None) -> Generator(kernel32.MEMORY_BASIC_INFORMATION)]
 
         Each overload (min_address, max_address, state, protect, m_type) allows you to filter for certain
@@ -168,10 +187,10 @@ class Process(object):
         the memory regions inside a module
 
         state can be -> MEM_COMMIT, MEM_FREE, MEM_RESERVE
-        
+
         protect can be a number of things, reference here:
         https://docs.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-memory_basic_information
-        
+
         m_type can be MEM_IMAGE (Regions mapped from exe/dll files), MEM_MAPPED or MEM_PRIVATE
 
         more information on memory types here:
@@ -193,7 +212,8 @@ class Process(object):
             if min_address:
                 bMinAddr = mem_basic_info.BaseAddress >= min_address
             if max_address:
-                bMaxAddr = (mem_basic_info.BaseAddress + mem_basic_info.RegionSize) < max_address
+                bMaxAddr = (mem_basic_info.BaseAddress +
+                            mem_basic_info.RegionSize) < max_address
             if state:
                 bState = mem_basic_info.State == state
             if protect:
@@ -221,7 +241,7 @@ class Process(object):
     def add_patch(self, patch_name, address, instructions):
         """
         Adds a patch to the patches list, applies patch to the process
-        
+
         Process.add_patch(patch_name, address, instructions)
 
         The patch is registered with a dictionary Process.patches
@@ -309,7 +329,7 @@ class Process(object):
         loadlib = kernel32.GetProcAddress(hmod, "LoadLibraryA")
         path_internal = self.alloc_rw(len(dll_path))
         self.write(path_internal, bytes(dll_path, "ASCII"))
-        self.create_thread(loadlib, parameter = path_internal)
+        self.create_thread(loadlib, parameter=path_internal)
 
 
 def yield_processes():
