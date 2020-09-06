@@ -333,7 +333,10 @@ class Process(object):
             return old_bytes
 
     def add_hook(self, hook_name, hook_address, assembly_code):
-        injected_code = self.asm.assemble(assembly_code)
+        if type(assembly_code) == str:
+            injected_code = self.asm.assemble(assembly_code)
+        elif type(assembly_code) == bytes or type(assembly_code) == bytearray:
+            injected_code = assembly_code
         self.suspend()
         target_address = self.alloc_rwx(len(injected_code))
         if self.mode:
