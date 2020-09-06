@@ -59,6 +59,11 @@ class Process(object):
         """
         return kernel32.ReadProcessMemory(self.handle, address, n_bytes)
 
+
+    def read_memory(self, region):
+        base, size = region.get_memory_range()
+        return self.read(base, size)
+
     def read_string(self, address):
         """
         Read an ASCII string from target process
@@ -199,6 +204,7 @@ class Process(object):
 
         protect can be a number of things, reference here:
         https://docs.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-memory_basic_information
+        you can combine them to select multiple types by '|' oring them together
 
         m_type can be MEM_IMAGE (Regions mapped from exe/dll files), MEM_MAPPED or MEM_PRIVATE
 
@@ -223,17 +229,18 @@ class Process(object):
             if max_address:
                 bMaxAddr = (mem_basic_info.BaseAddress +
                             mem_basic_info.RegionSize) < max_address
+                if address > max_address:
+                    break
             if state:
                 bState = mem_basic_info.State == state
             if protect:
-                bProtect = mem_basic_info.Protect == protect
+                bProtect = bool(mem_basic_info.Protect & protect)
             if m_type:
                 bType = mem_basic_info.Type == m_type
             if bState and bProtect and bType and bMinAddr and bMaxAddr:
                 yield mem_basic_info
             address = mem_basic_info.BaseAddress + mem_basic_info.RegionSize
-            if address > max_address:
-                break
+
             mem_basic_info = kernel32.VirtualQueryEx(
                 self.handle, address)
 

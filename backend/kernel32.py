@@ -99,6 +99,7 @@ class THREADENTRY32(Structure):
 
 
 protections = {
+    0:"invalid",
     PAGE_READONLY: "r",
     PAGE_READWRITE: "rw",
     PAGE_WRITECOPY: "wc",
@@ -133,7 +134,15 @@ class MEMORY_BASIC_INFORMATION(Structure):
         return mem_range
 
     def get_protect(self):
-        return protections[self.Protect]
+        protect = self.Protect
+        guarded = False
+        if protect & PAGE_GUARD:
+            protect = protect ^ PAGE_GUARD
+            guarded = True
+        protect_s = protections[protect]
+        if guarded:
+            protect_s += "g"
+        return protect_s
 
 
 class FLOATING_SAVE_AREA(Structure):
