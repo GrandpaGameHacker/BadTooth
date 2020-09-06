@@ -57,7 +57,7 @@ if len(sys.argv) != 2:
     print("ScriptError: wrong arguments\nExpected process_name")
     quit()
 process_name = sys.argv[1]
-target = Process(get_process_first(process_name).get_pid())
+target = Process(process_name)
 byte_size = 8
 if target.is_32bit():
     byte_size = 4

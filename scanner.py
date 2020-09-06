@@ -2,6 +2,9 @@ from .backend import *
 import struct
 
 class Scanner():
+    """
+    Warning - SLOW AS FUCK!
+    """
     def __init__(self, process_name):
         self.process_entry = get_process_first(process_name)
         self.process = Process(self.process_entry.get_pid())
@@ -37,7 +40,7 @@ class Scanner():
         matches = []
         b_len = len(buffer)
         v_len = len(value)
-        for i in range(b_len, step=v_len):
+        for i in range(0, b_len, v_len):
             for x in range(v_len):
                 if buffer[i + x] != value[x]:
                     break
@@ -88,13 +91,17 @@ class Scanner():
         return found
 
     def scan_char(self, value):
-        pass
+        value_bytes = struct.pack("B", value)
+        return self.scan_aob_aligned(value_bytes)
 
     def scan_short(self, value):
-        pass
+        value_bytes = struct.pack("H", value)
+        return self.scan_aob_aligned(value_bytes)
 
     def scan_long(self, value):
-        pass
+        value_bytes = struct.pack("I", value)
+        return self.scan_aob_aligned(value_bytes)
 
     def scan_longlong(self, value):
-        pass
+        value_bytes = struct.pack("Q", value)
+        return self.scan_aob_aligned(value_bytes)
