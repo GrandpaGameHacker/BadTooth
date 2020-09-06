@@ -209,7 +209,7 @@ class Process(object):
 
         protect can be a number of things, reference here:
         https://docs.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-memory_basic_information
-        you can combine them to select multiple types by '|' oring them together
+        you can combine them to select multiple types by '|' bitwise or them together
 
         m_type can be MEM_IMAGE (Regions mapped from exe/dll files), MEM_MAPPED or MEM_PRIVATE
 
@@ -291,6 +291,9 @@ class Process(object):
         patch_instructions = self.read(patch_address, patch_size)
         self.write(patch_address, old_data)
         self.patches[patch_name] = (patch_address, patch_instructions)
+
+# plan to simplify the hook engine by stubbing out some of the repeated code and making
+# it into separate functions. e.g. get_instr_len(hook_address, max, read_size)
 
     def detour_hook(self, target_address, hook_address):
         if self.mode:

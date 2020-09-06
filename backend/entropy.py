@@ -2,11 +2,10 @@ import math
 
 
 def entropy(buffer):
-    entropy = 0.0
+    entropy_value = 0.0
     f_length = float(len(buffer))
-    logbase = math.log(256)
+    log_base = math.log(256)
     occurrences = [0] * 256
-    p = 0
     for byte in buffer:
         occurrences[byte] += 1
 
@@ -14,8 +13,8 @@ def entropy(buffer):
         if count == 0:
             continue
         p = float(count / f_length)
-        entropy += p * math.log(p) / logbase
-    return -entropy
+        entropy_value += p * math.log(p) / log_base
+    return -entropy_value
 
 
 def entropy_series(buffer, block_size):
