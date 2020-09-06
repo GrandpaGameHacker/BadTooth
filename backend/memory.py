@@ -172,6 +172,15 @@ class Process(object):
         while kernel32.Module32Next(hSnapshot, module_entry):
             yield module_entry
 
+    def get_module_by_name(self, module_name):
+        module_name = module_name.lower()
+        module_gen = self.yield_modules()
+        for module in module_gen:
+            curr_module_name = module.get_name().lower()
+            if curr_module_name.find(module_name) != -1:
+                return module
+
+
     def yield_memory_regions(self, min_address=None, max_address=None, state=None, protect=None, m_type=None):
         """
         Yields memory regions one by one using a generator object

@@ -73,7 +73,7 @@ class MODULEENTRY32(Structure):
         return addressof(self.modBaseAddr.contents) + self.modBaseSize - 1
 
     def get_memory_range(self):
-        mem_range = (self.get_base_address(), self.get_end_address())
+        mem_range = (self.get_base_address(), self.modBaseSize - 1)
         return mem_range
 
     def get_size(self):
@@ -98,6 +98,20 @@ class THREADENTRY32(Structure):
         return self.th32OwnerProcessID
 
 
+protections = {
+    PAGE_READONLY: "r",
+    PAGE_READWRITE: "rw",
+    PAGE_WRITECOPY: "wc",
+    PAGE_WRITECOMBINE: "wc+",
+    PAGE_EXECUTE: "x",
+    PAGE_EXECUTE_READ: "rx",
+    PAGE_EXECUTE_READWRITE: "rwx",
+    PAGE_EXECUTE_WRITECOPY: "wcx",
+    PAGE_NOCACHE: "nc",
+    PAGE_NOACCESS: "n"
+}
+
+
 class MEMORY_BASIC_INFORMATION(Structure):
     _fields_ = [
         ("BaseAddress", c_void_p),
@@ -115,22 +129,10 @@ class MEMORY_BASIC_INFORMATION(Structure):
         return self.BaseAddress + self.RegionSize
 
     def get_memory_range(self):
-        mem_range = (self.get_base_address(), self.get_end_address())
+        mem_range = (self.get_base_address(), self.RegionSize)
         return mem_range
 
     def get_protect(self):
-        protections = {
-            PAGE_READONLY: "r",
-            PAGE_READWRITE: "rw",
-            PAGE_WRITECOPY: "wc",
-            PAGE_WRITECOMBINE: "wc+",
-            PAGE_EXECUTE: "x",
-            PAGE_EXECUTE_READ: "rx",
-            PAGE_EXECUTE_READWRITE: "rwx",
-            PAGE_EXECUTE_WRITECOPY: "wcx",
-            PAGE_NOCACHE: "nc",
-            PAGE_NOACCESS: "n"
-        }
         return protections[self.Protect]
 
 
@@ -148,6 +150,8 @@ class FLOATING_SAVE_AREA(Structure):
     ]
 
 # intel64
+
+
 class CONTEXT64(Structure):
     _fields_ = [
         ("P1Home", QWORD),
@@ -186,7 +190,7 @@ class CONTEXT64(Structure):
         ("R14", QWORD),
         ("R15", QWORD),
         ("Rip", QWORD),
-        ("Xmm0", c_float * 4), # ugh
+        ("Xmm0", c_float * 4),  # ugh
         ("Xmm1", c_float * 4),
         ("Xmm2", c_float * 4),
         ("Xmm3", c_float * 4),
