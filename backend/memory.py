@@ -229,8 +229,6 @@ class Process(object):
             if max_address:
                 bMaxAddr = (mem_basic_info.BaseAddress +
                             mem_basic_info.RegionSize) < max_address
-                if address > max_address:
-                    break
             if state:
                 bState = mem_basic_info.State == state
             if protect:
@@ -240,7 +238,11 @@ class Process(object):
             if bState and bProtect and bType and bMinAddr and bMaxAddr:
                 yield mem_basic_info
             address = mem_basic_info.BaseAddress + mem_basic_info.RegionSize
-
+            if max_address:
+                if address > max_address:
+                    break
+            if address > sysmax_address:
+                break
             mem_basic_info = kernel32.VirtualQueryEx(
                 self.handle, address)
 
