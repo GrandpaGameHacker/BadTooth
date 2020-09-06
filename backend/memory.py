@@ -1,7 +1,7 @@
 from . import kernel32
 from . import ntdll
 from . import winnt_constants
-
+from .x86 import Dsm, Asm
 import struct
 
 
@@ -31,8 +31,11 @@ class Process(object):
         if type(process) == str:
             self.process_id = get_process_first(process).get_pid()
             self.handle = kernel32.OpenProcess(self.process_id)
+        self.mode = self.is_32bit()
         self.patches = {}
         self.hooks = {}
+        self.asm = Asm(self.mode)
+        self.dsm = Dsm(self.mode)
 
     def __del__(self):
         """
@@ -64,7 +67,6 @@ class Process(object):
         """
         return kernel32.ReadProcessMemory(self.handle, address, n_bytes)
 
-
     def read_memory(self, region):
         base, size = region.get_memory_range()
         return self.read(base, size)
@@ -84,7 +86,6 @@ class Process(object):
                 i = i + 1
             elif char == 0:
                 return string
-        return string
 
     def write(self, address, buffer):
         """
@@ -136,12 +137,12 @@ class Process(object):
 
         Process.yield_threads() -> Generator(kernel32.THREADENTRY32)
         """
-        hSnapshot = kernel32.CreateToolhelp32Snapshot(
+        h_snapshot = kernel32.CreateToolhelp32Snapshot(
             winnt_constants.TH32CS_SNAPTHREAD, 0)
-        thread_entry = kernel32.Thread32First(hSnapshot)
+        thread_entry = kernel32.Thread32First(h_snapshot)
         if thread_entry.get_owner_pid() == self.process_id:
             yield thread_entry
-        while kernel32.Thread32Next(hSnapshot, thread_entry):
+        while kernel32.Thread32Next(h_snapshot, thread_entry):
             if thread_entry.get_owner_pid() == self.process_id:
                 yield thread_entry
 
@@ -175,11 +176,11 @@ class Process(object):
 
         Process.yield_modules() -> Generator(kernel32.MODULEENTRY32)
         """
-        hSnapshot = kernel32.CreateToolhelp32Snapshot(
+        h_snapshot = kernel32.CreateToolhelp32Snapshot(
             winnt_constants.TH32CS_SNAPMODULE, self.process_id)
-        module_entry = kernel32.Module32First(hSnapshot)
+        module_entry = kernel32.Module32First(h_snapshot)
         yield module_entry
-        while kernel32.Module32Next(hSnapshot, module_entry):
+        while kernel32.Module32Next(h_snapshot, module_entry):
             yield module_entry
 
     def get_module_by_name(self, module_name):
@@ -189,7 +190,6 @@ class Process(object):
             curr_module_name = module.get_name().lower()
             if curr_module_name.find(module_name) != -1:
                 return module
-
 
     def yield_memory_regions(self, min_address=None, max_address=None, state=None, protect=None, m_type=None):
         """
@@ -218,35 +218,35 @@ class Process(object):
 
         """
         system_info = kernel32.GetSystemInfo()
-        sysmin_address = system_info.lpMinimumApplicationAddress
-        sysmax_address = system_info.lpMaximumApplicationAddress
+        sys_min_address = system_info.lpMinimumApplicationAddress
+        sys_max_address = system_info.lpMaximumApplicationAddress
         mem_basic_info = kernel32.VirtualQueryEx(
-            self.handle, sysmin_address)
+            self.handle, sys_min_address)
 
         while mem_basic_info is not None:
-            bMinAddr = True
-            bMaxAddr = True
-            bState = True
-            bProtect = True
-            bType = True
+            b_min_addr = True
+            b_max_addr = True
+            b_state = True
+            b_protect = True
+            b_type = True
             if min_address:
-                bMinAddr = mem_basic_info.BaseAddress >= min_address
+                b_min_addr = mem_basic_info.BaseAddress >= min_address
             if max_address:
-                bMaxAddr = (mem_basic_info.BaseAddress +
-                            mem_basic_info.RegionSize) < max_address
+                b_max_addr = (mem_basic_info.BaseAddress +
+                              mem_basic_info.RegionSize) < max_address
             if state:
-                bState = mem_basic_info.State == state
+                b_state = mem_basic_info.State == state
             if protect:
-                bProtect = bool(mem_basic_info.Protect & protect)
+                b_protect = bool(mem_basic_info.Protect & protect)
             if m_type:
-                bType = mem_basic_info.Type == m_type
-            if bState and bProtect and bType and bMinAddr and bMaxAddr:
+                b_type = mem_basic_info.Type == m_type
+            if b_state and b_protect and b_type and b_min_addr and b_max_addr:
                 yield mem_basic_info
             address = mem_basic_info.BaseAddress + mem_basic_info.RegionSize
             if max_address:
                 if address > max_address:
                     break
-            if address > sysmax_address:
+            if address > sys_max_address:
                 break
             mem_basic_info = kernel32.VirtualQueryEx(
                 self.handle, address)
@@ -292,50 +292,73 @@ class Process(object):
         self.write(patch_address, old_data)
         self.patches[patch_name] = (patch_address, patch_instructions)
 
-    def detour_hook(self, target_address, hook_address, instr_length):
-        """
-        Used internally, auto generates and writes jmp instructions for a hook
-        Does not generate return jmp/ret to original code
-        """
-        if self.is_32bit():
+    def detour_hook(self, target_address, hook_address):
+        if self.mode:
+            instr_data = self.read(hook_address, 30)
+            code_disasm = self.dsm.dis_lite_all(instr_data, hook_address)
+            instr_length = 0
             nops = b''
-            if instr_length > 5:
-                nops = b'\x90' * (instr_length - 5)
+            for instr in code_disasm:
+                instr_length += instr[1]
+                if instr_length >= 5:
+                    nops = b'\x90' * (instr_length - 5)
+                    break
             old_protect = kernel32.VirtualProtectEx(
                 self.handle, hook_address, instr_length, kernel32.PAGE_EXECUTE_READWRITE)
             hook_relative = target_address - hook_address - 5
-            hook = b'\xE9' + struct.pack("i", hook_relative) + nops
+            hook_inject = b'\xE9' + struct.pack("i", hook_relative) + nops
             old_bytes = self.read(hook_address, instr_length)
-            self.write(hook_address, hook)
+            self.write(hook_address, hook_inject)
             kernel32.VirtualProtectEx(
                 self.handle, hook_address, instr_length, old_protect)
             return old_bytes
         else:
+            instr_data = self.read(hook_address, 30)
+            code_disasm = self.dsm.dis_lite_all(instr_data, hook_address)
+            instr_length = 0
             nops = b''
-            if instr_length > 14:
-                nops = b'\x90' * (instr_length - 14)
+            for instr in code_disasm:
+                instr_length += instr[1]
+                if instr_length >= 14:
+                    nops = b'\x90' * (instr_length - 14)
+                    break
             old_protect = kernel32.VirtualProtectEx(
                 self.handle, hook_address, instr_length, kernel32.PAGE_EXECUTE_READWRITE)
-            hook = b'\xFF\x25\x00\x00\x00\x00' + \
-                struct.pack("Q", target_address) + nops
+            hook_inject = b'\xFF\x25\x00\x00\x00\x00' + \
+                          struct.pack("Q", target_address) + nops
             old_bytes = self.read(hook_address, instr_length)
-            self.write(hook_address, hook)
+            self.write(hook_address, hook_inject)
             kernel32.VirtualProtectEx(
                 self.handle, hook_address, instr_length, old_protect)
             return old_bytes
 
-    def add_hook(self, hook_name, hook_address, hook_instr_len, new_code):
+    def add_hook(self, hook_name, hook_address, assembly_code):
+        injected_code = self.asm.assemble(assembly_code)
         self.suspend()
-        target_address = self.alloc_rwx(len(new_code))
-        if self.is_32bit():
-            hook_relative = hook_address - (target_address + len(new_code))
-            new_code = new_code + b'\xE9' + struct.pack("i", hook_relative)
+        target_address = self.alloc_rwx(len(injected_code))
+        if self.mode:
+            instr_data = self.read(hook_address, 30)
+            code_disasm = self.dsm.dis_lite_all(instr_data, hook_address)
+            instr_length = 0
+            for instr in code_disasm:
+                instr_length += instr[1]
+                if instr_length >= 5:
+                    break
+            hook_relative = hook_address - (target_address + len(injected_code))
+            new_code = injected_code + b'\xE9' + struct.pack("i", hook_relative)
         else:
-            new_code = new_code + b'\xFF\x25\x00\x00\x00\x00' + \
-                struct.pack("Q", hook_address + hook_instr_len)
-        self.write(target_address, new_code)
+            instr_data = self.read(hook_address, 30)
+            code_disasm = self.dsm.dis_lite_all(instr_data, hook_address)
+            instr_length = 0
+            for instr in code_disasm:
+                instr_length += instr[1]
+                if instr_length >= 14:
+                    break
+            injected_code = injected_code + b'\xFF\x25\x00\x00\x00\x00' + \
+                       struct.pack("Q", hook_address + 14)
+        self.write(target_address, injected_code)
         old_bytes = self.detour_hook(
-            target_address, hook_address, hook_instr_len)
+            target_address, hook_address)
         self.resume()
         self.hooks[hook_name] = (hook_address, old_bytes, target_address)
 
@@ -348,19 +371,19 @@ class Process(object):
         self.hooks.pop(hook_name)
 
     def basic_inject_dll(self, dll_path):
-        hmod = kernel32.GetModuleHandle("kernel32.dll")
-        loadlib = kernel32.GetProcAddress(hmod, "LoadLibraryA")
+        module_handle = kernel32.GetModuleHandle("kernel32.dll")
+        load_lib = kernel32.GetProcAddress(module_handle, "LoadLibraryA")
         path_internal = self.alloc_rw(len(dll_path))
         self.write(path_internal, bytes(dll_path, "ASCII"))
-        self.create_thread(loadlib, parameter=path_internal)
+        self.create_thread(load_lib, parameter=path_internal)
 
 
 def yield_processes():
-    hSnapshot = kernel32.CreateToolhelp32Snapshot(
+    h_snapshot = kernel32.CreateToolhelp32Snapshot(
         winnt_constants.TH32CS_SNAPPROCESS, 0)
-    proc_entry = kernel32.Process32First(hSnapshot)
+    proc_entry = kernel32.Process32First(h_snapshot)
     yield proc_entry
-    while kernel32.Process32Next(hSnapshot, proc_entry):
+    while kernel32.Process32Next(h_snapshot, proc_entry):
         yield proc_entry
 
 
@@ -380,6 +403,6 @@ def get_processes(process_name):
     return process_list
 
 
-def enable_sedebug():
+def enable_se_debug():
     ntdll.AdjustPrivilege(
         ntdll.SE_DEBUG_PRIVILEGE, True)

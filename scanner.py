@@ -1,10 +1,12 @@
 from .backend import *
 import struct
 
+
 class Scanner():
     """
-    Warning - SLOW AS FUCK!
+    Warning - SLOW AS FUCK! KEK
     """
+
     def __init__(self, process_name):
         self.process_entry = get_process_first(process_name)
         self.process = Process(self.process_entry.get_pid())
@@ -12,8 +14,7 @@ class Scanner():
         # scan settings
         self.min_address = 0
         self.max_address = 0x00007fffffffffff
-        self.default_protect = PAGE_READONLY | PAGE_READWRITE | PAGE_EXECUTE_READ |\
-            PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY | PAGE_WRITECOPY
+        self.default_protect = PAGE_READWRITE
         self.protect = self.default_protect
 
     def reset_range(self):
