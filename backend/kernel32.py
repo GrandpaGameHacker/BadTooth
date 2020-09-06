@@ -99,7 +99,7 @@ class THREADENTRY32(Structure):
 
 
 protections = {
-    0:"invalid",
+    0: "invalid",
     PAGE_READONLY: "r",
     PAGE_READWRITE: "rw",
     PAGE_WRITECOPY: "wc",
@@ -143,6 +143,15 @@ class MEMORY_BASIC_INFORMATION(Structure):
         if guarded:
             protect_s += "g"
         return protect_s
+
+    def is_readable(self):
+        protect = self.Protect
+        guarded = bool(protect & PAGE_GUARD)
+        noaccess = bool(protect & PAGE_NOACCESS)
+        if guarded or noaccess:
+            return False
+        else:
+            return True
 
 
 class FLOATING_SAVE_AREA(Structure):

@@ -9,10 +9,17 @@ class Scanner():
         # scan settings
         self.min_address = 0
         self.max_address = 0x00007fffffffffff
+        self.default_protect = PAGE_READONLY | PAGE_READWRITE | PAGE_EXECUTE_READ | \
+            PAGE_EXECUTE_READWRITE | PAGE_EXECUTE_WRITECOPY | PAGE_WRITECOPY
+        self.protect = default_protect
 
     def reset_range(self):
         self.min_address = 0
         self.max_address = 0x00007fffffffffff
+
+    def reset_options(self):
+        self.reset_range()
+        self.protect = self.default_protect
 
     def find_all(self, base_address, buffer, value):
         matches = []
@@ -31,7 +38,7 @@ class Scanner():
         memory_gen = self.process.yield_memory_regions(
             min_address=self.min_address,
             max_address=self.max_address,
-            state=MEM_COMMIT)
+            state=MEM_COMMIT, protect=self.protect)
 
         for memory in memory_gen:
             base, size = memory.get_memory_range()
