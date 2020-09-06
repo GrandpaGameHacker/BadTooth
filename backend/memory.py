@@ -15,17 +15,22 @@ class Process(object):
      | Process will automatically close the handle upon destruction.
     """
 
-    def __init__(self, process_id):
+    def __init__(self, process):
         """
-        Process(process_id) -> Process
+        Process(process) -> Process
+        process can either be a process id or a process name (gets first entry)
         internal variables:
         process_id - ID of target process
         handle - handle to target process
         patches - dictionary of all loaded patches
         hooks - dictionary of all loaded hooks
         """
-        self.process_id = process_id
-        self.handle = kernel32.OpenProcess(process_id)
+        if type(process) == int:
+            self.process_id = process
+            self.handle = kernel32.OpenProcess(self.process_id)
+        if type(process) == str:
+            self.process_id = get_process_first(process).get_pid()
+            self.handle = kernel32.OpenProcess(self.process_id)
         self.patches = {}
         self.hooks = {}
 

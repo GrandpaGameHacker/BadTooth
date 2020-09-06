@@ -70,7 +70,7 @@ class Scanner():
         self.reset_range()
         return result
 
-    def scan_aob_aligned(self value):
+    def scan_aob_aligned(self, value):
         found = []
         memory_gen = self.process.yield_memory_regions(
             min_address=self.min_address,
