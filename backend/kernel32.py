@@ -386,6 +386,21 @@ __CreateProcessA.argtypes = [LPCSTR, LPSTR, POINTER(SECURITY_ATTRIBUTES),
                              ]
 __CreateProcessA.restype = BOOL
 
+# debugging
+__DebugActiveProcess = kernel32.DebugActiveProcess
+__DebugActiveProcess.argtypes = [DWORD]
+__DebugActiveProcess.restype = BOOL
+
+__DebugActiveProcessStop = kernel32.DebugActiveProcessStop
+__DebugActiveProcessStop.argtypes = [DWORD]
+__DebugActiveProcessStop.restype = BOOL
+
+__ContinueDebugEvent = kernel32.ContinueDebugEvent
+__ContinueDebugEvent.argtypes = [DWORD, DWORD, DWORD]
+__ContinueDebugEvent.restype = BOOL
+
+__WaitForDebugEvent = kernel32.WaitForDebugEvent
+#__WaitForDebugEvent.argtypes = []
 # external api
 
 
