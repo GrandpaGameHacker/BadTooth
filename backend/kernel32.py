@@ -328,6 +328,15 @@ __CreateRemoteThreadEx.restype = HANDLE
 __IsWow64Process = kernel32.IsWow64Process
 __IsWow64Process.argtypes = [HANDLE, PBOOL]
 __IsWow64Process.restype = BOOL
+
+__WaitForSingleObject = kernel32.WaitForSingleObject
+__WaitForSingleObject.argtypes = [HANDLE, DWORD]
+__WaitForSingleObject.restype = DWORD
+
+__TerminateProcess = kernel32.TerminateProcess
+__TerminateProcess.argtypes = [HANDLE, UINT]
+__TerminateProcess.restype = BOOL
+
 # external api
 
 
@@ -539,3 +548,17 @@ def IsWow64Process(handle):
     else:
         report_last_error()
         return result
+
+
+def WaitForSingleObject(object_handle, milliseconds):
+    result = __WaitForSingleObject(object_handle, milliseconds)
+    if result == WAIT_FAILED:
+        report_last_error()
+    return result
+
+
+def TerminateProcess(process_handle, exit_code):
+    success = __TerminateProcess(process_handle, exit_code)
+    if not success:
+        report_last_error()
+    return success

@@ -29,8 +29,14 @@ class Process(object):
             self.process_id = process
             self.handle = kernel32.OpenProcess(self.process_id)
         if type(process) == str:
-            self.process_id = get_process_first(process).get_pid()
-            self.handle = kernel32.OpenProcess(self.process_id)
+            proc = get_process_first(process)
+            if proc != None:
+                self.process_id = proc.get_pid()
+                self.handle = kernel32.OpenProcess(self.process_id)
+                self.failed = False
+            else:
+                self.failed = True
+                return None
         self.mode = self.is_32bit()
         self.patches = {}
         self.hooks = {}
@@ -167,6 +173,16 @@ class Process(object):
             thread_handle = kernel32.OpenThread(thread.get_tid())
             kernel32.ResumeThread(thread_handle)
             kernel32.CloseHandle(thread_handle)
+
+    def is_alive(self):
+    	alive = kernel32.WaitForSingleObject(self.handle, 0)
+		if alive == kernel32.WAIT_TIMEOUT:
+			return True
+		else:
+			return False
+
+	def kill(self, exit_code):
+		return kernel32.TerminateProcess(self.handle, exit_code)
 
     def yield_modules(self):
         """
@@ -377,11 +393,44 @@ class Process(object):
         self.hooks.pop(hook_name)
 
     def basic_inject_dll(self, dll_path):
-        module_handle = kernel32.GetModuleHandle("kernel32.dll")
-        load_lib = kernel32.GetProcAddress(module_handle, "LoadLibraryA")
+        kernel32_handle = kernel32.GetModuleHandle("kernel32.dll")
+        load_lib = kernel32.GetProcAddress(kernel32_handle, "LoadLibraryA")
         path_internal = self.alloc_rw(len(dll_path))
         self.write(path_internal, bytes(dll_path, "ASCII"))
         self.create_thread(load_lib, parameter=path_internal)
+
+class ProcessWatcher:
+	def __init__(self, process):
+		self.process = process
+
+	def wait_for(self):
+		proc = Process(self.process)
+		while proc.failed == True:
+			proc = Process(self.process)
+		self.proc = proc
+		self.attached = True
+		return proc
+
+	def is_alive(self):
+		return self.proc.is_alive()
+
+	def wait_for_suspend(self):
+		self.wait_for()
+		self.proc.suspend()
+
+	def resume(self):
+		self.proc.resume()
+
+	def watch_address(self, address, size):
+		original_bytes = self.read(address, size)
+		changed = False
+		while not changed:
+			time.sleep(0.05)
+			curr_bytes = self.read(address, size)
+			if curr_bytes != original_bytes:
+				changed = True
+		return True
+
 
 
 def yield_processes():
