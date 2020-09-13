@@ -50,6 +50,24 @@ class Process(object):
         if 'handle' in dir(self):
             kernel32.CloseHandle(self.handle)
 
+    def start(app_name, command_line):
+        process_id = kernel32.CreateProcess(app_name, command_line, 0)
+        return Process(process_id)
+
+    def start_suspended(app_name, command_line):
+        process_id = kernel32.CreateProcess(app_name, command_line, winnt_constants.CREATE_SUSPENDED)
+        return Process(process_id)
+
+    def is_alive(self):
+        alive = kernel32.WaitForSingleObject(self.handle, 0)
+        if alive == winnt_constants.WAIT_TIMEOUT:
+            return True
+        else:
+            return False
+
+    def kill(self, exit_code):
+        return kernel32.TerminateProcess(self.handle, exit_code)
+
     def is_32bit(self):
         """
         Checks whether target process is running under 32bit mode or 64bit mode
@@ -125,7 +143,7 @@ class Process(object):
         Process.alloc_rwx(size) -> address: int
         """
         return kernel32.VirtualAllocEx(self.handle, 0, size,
-                                       protect=kernel32.PAGE_READWRITE)
+                                       protect=winnt_constants.PAGE_READWRITE)
 
     def free(self, address):
         """
@@ -173,16 +191,6 @@ class Process(object):
             thread_handle = kernel32.OpenThread(thread.get_tid())
             kernel32.ResumeThread(thread_handle)
             kernel32.CloseHandle(thread_handle)
-
-    def is_alive(self):
-    	alive = kernel32.WaitForSingleObject(self.handle, 0)
-		if alive == kernel32.WAIT_TIMEOUT:
-			return True
-		else:
-			return False
-
-	def kill(self, exit_code):
-		return kernel32.TerminateProcess(self.handle, exit_code)
 
     def yield_modules(self):
         """
@@ -314,16 +322,10 @@ class Process(object):
     def detour_hook(self, target_address, hook_address):
         if self.mode:
             instr_data = self.read(hook_address, 30)
-            code_disasm = self.dsm.dis_lite_all(instr_data, hook_address)
-            instr_length = 0
-            nops = b''
-            for instr in code_disasm:
-                instr_length += instr[1]
-                if instr_length >= 5:
-                    nops = b'\x90' * (instr_length - 5)
-                    break
+            instr_length = self.dsm.get_instr_length(instr_data, hook_address, 5)
+            nops = b'\x90' * (instr_length - 5)
             old_protect = kernel32.VirtualProtectEx(
-                self.handle, hook_address, instr_length, kernel32.PAGE_EXECUTE_READWRITE)
+                self.handle, hook_address, instr_length, winnt_constants.PAGE_EXECUTE_READWRITE)
             hook_relative = target_address - hook_address - 5
             hook_inject = b'\xE9' + struct.pack("i", hook_relative) + nops
             old_bytes = self.read(hook_address, instr_length)
@@ -333,16 +335,10 @@ class Process(object):
             return old_bytes
         else:
             instr_data = self.read(hook_address, 30)
-            code_disasm = self.dsm.dis_lite_all(instr_data, hook_address)
-            instr_length = 0
-            nops = b''
-            for instr in code_disasm:
-                instr_length += instr[1]
-                if instr_length >= 14:
-                    nops = b'\x90' * (instr_length - 14)
-                    break
+            instr_length = self.dsm.get_instr_length(instr_data, hook_address, 14)
+            nops = b'\x90' * (instr_length - 14)
             old_protect = kernel32.VirtualProtectEx(
-                self.handle, hook_address, instr_length, kernel32.PAGE_EXECUTE_READWRITE)
+                self.handle, hook_address, instr_length, winnt_constants.PAGE_EXECUTE_READWRITE)
             hook_inject = b'\xFF\x25\x00\x00\x00\x00' + \
                           struct.pack("Q", target_address) + nops
             old_bytes = self.read(hook_address, instr_length)
@@ -360,22 +356,12 @@ class Process(object):
         target_address = self.alloc_rwx(len(injected_code))
         if self.mode:
             instr_data = self.read(hook_address, 30)
-            code_disasm = self.dsm.dis_lite_all(instr_data, hook_address)
-            instr_length = 0
-            for instr in code_disasm:
-                instr_length += instr[1]
-                if instr_length >= 5:
-                    break
+            instr_length = self.dsm.get_instr_length(instr_data, hook_address, 5)
             hook_relative = hook_address - (target_address + len(injected_code))
             new_code = injected_code + b'\xE9' + struct.pack("i", hook_relative)
         else:
             instr_data = self.read(hook_address, 30)
-            code_disasm = self.dsm.dis_lite_all(instr_data, hook_address)
-            instr_length = 0
-            for instr in code_disasm:
-                instr_length += instr[1]
-                if instr_length >= 14:
-                    break
+            instr_length = self.dsm.get_instr_length(instr_data, hook_address, 14)
             injected_code = injected_code + b'\xFF\x25\x00\x00\x00\x00' + \
                        struct.pack("Q", hook_address + 14)
         self.write(target_address, injected_code)
@@ -400,36 +386,36 @@ class Process(object):
         self.create_thread(load_lib, parameter=path_internal)
 
 class ProcessWatcher:
-	def __init__(self, process):
-		self.process = process
+    def __init__(self, process):
+        self.process = process
 
-	def wait_for(self):
-		proc = Process(self.process)
-		while proc.failed == True:
-			proc = Process(self.process)
-		self.proc = proc
-		self.attached = True
-		return proc
+    def wait_for(self):
+        proc = Process(self.process)
+        while proc.failed == True:
+            proc = Process(self.process)
+        self.proc = proc
+        self.attached = True
+        return proc
 
-	def is_alive(self):
-		return self.proc.is_alive()
+    def is_alive(self):
+        return self.proc.is_alive()
 
-	def wait_for_suspend(self):
-		self.wait_for()
-		self.proc.suspend()
+    def wait_for_suspend(self):
+        self.wait_for()
+        self.proc.suspend()
 
-	def resume(self):
-		self.proc.resume()
+    def resume(self):
+        self.proc.resume()
 
-	def watch_address(self, address, size):
-		original_bytes = self.read(address, size)
-		changed = False
-		while not changed:
-			time.sleep(0.05)
-			curr_bytes = self.read(address, size)
-			if curr_bytes != original_bytes:
-				changed = True
-		return True
+    def watch_address(self, address, size):
+        original_bytes = self.read(address, size)
+        changed = False
+        while not changed:
+            time.sleep(0.05)
+            curr_bytes = self.read(address, size)
+            if curr_bytes != original_bytes:
+                changed = True
+        return True
 
 
 

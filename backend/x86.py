@@ -7,6 +7,7 @@ class Asm:
     Class to assemble x86/x86-64 instructions into machine code
     Asm(mode_32: bool) -> Asm
     """
+
     def __init__(self, mode_32):
         if mode_32:
             self.ks = Ks(KS_ARCH_X86, KS_MODE_32)
@@ -26,6 +27,7 @@ class Dsm:
     Class to disassemble x86/x86-64 instructions
     Dsm(mode_32: bool) -> Dsm
     """
+
     def __init__(self, mode_32):
         if mode_32:
             self.cs = Cs(CS_ARCH_X86, CS_MODE_32)
@@ -55,7 +57,8 @@ class Dsm:
 
     def dis_lite(self, code, address):
         """
-        Disassembles code via a generator, each generated instruction is in string form
+        Disassembles code via a generator,
+        each generated instruction is in string form
         and resides in a tuple, faster than other disassembly modes
         Dsm.dis_lite(code: bytes-like-object, address: int) -> Generator(Tuple(instruction_details...))
         """
@@ -80,3 +83,12 @@ class Dsm:
         Disables extra details in the disassembly.
         """
         self.cs.detail = False
+
+    def get_instr_length(code, address, max_len):
+        disassembly = self.dis_lite(code, address)
+        instr_length = 0
+        for instr in disassembly:
+            instr_length += instr[1]
+            if instr_length >= max_len:
+                break
+        return instr_length

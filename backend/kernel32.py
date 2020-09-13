@@ -234,6 +234,46 @@ class CONTEXT64(Structure):
     ]
 
 
+class SECURITY_ATTRIBUTES(Structure):
+    _fields_ = [
+        ("nLength", DWORD),
+        ("lpSecurityDescriptor", LPVOID),
+        ("bInheritHandle", BOOL)
+    ]
+
+
+class STARTUPINFOA(Structure):
+    _fields_ = [
+        ("cb", DWORD),
+        ("lpReserved", LPSTR),
+        ("lpDesktop", LPSTR),
+        ("lpTitle", LPSTR),
+        ("dwX", DWORD),
+        ("dwY", DWORD),
+        ("dwXSize", DWORD),
+        ("dwYSize", DWORD),
+        ("dwXCountChars", DWORD),
+        ("dwYCountChars", DWORD),
+        ("dwFillAttribute", DWORD),
+        ("dwFlags", DWORD),
+        ("wShowWindow", WORD),
+        ("cbReserved2", WORD),
+        ("lpReserved2", LPBYTE),
+        ("hStdInput", HANDLE),
+        ("hStdOutput", HANDLE),
+        ("hStdError", HANDLE)
+    ]
+
+
+class PROCESS_INFORMATION(Structure):
+    _fields_ = [
+        ("hProcess", HANDLE),
+        ("hThread", HANDLE),
+        ("dwProcessId", DWORD),
+        ("dwThreadId", DWORD)
+    ]
+
+
 # internal function definitions
 __GetSystemInfo = kernel32.GetSystemInfo
 
@@ -336,6 +376,15 @@ __WaitForSingleObject.restype = DWORD
 __TerminateProcess = kernel32.TerminateProcess
 __TerminateProcess.argtypes = [HANDLE, UINT]
 __TerminateProcess.restype = BOOL
+
+__CreateProcessA = kernel32.CreateProcessA
+__CreateProcessA.argtypes = [LPCSTR, LPSTR, POINTER(SECURITY_ATTRIBUTES),
+                             POINTER(SECURITY_ATTRIBUTES), BOOL,
+                             DWORD, LPVOID, LPCSTR,
+                             POINTER(STARTUPINFOA),
+                             POINTER(PROCESS_INFORMATION)
+                             ]
+__CreateProcessA.restype = BOOL
 
 # external api
 
@@ -555,6 +604,24 @@ def WaitForSingleObject(object_handle, milliseconds):
     if result == WAIT_FAILED:
         report_last_error()
     return result
+
+
+def CreateProcess(application_name, command_line, flags):
+    process_sec = SECURITY_ATTRIBUTES()
+    thread_sec = SECURITY_ATTRIBUTES()
+    startup_info = STARTUPINFOA()
+    startup_info.cb = sizeof(startup_info)
+    process_info = PROCESS_INFORMATION()
+    application_name = c_char_p(application_name.encode("ASCII"))
+    command_line = c_char_p(command_line.encode("ASCII"))
+    success = __CreateProcessA(application_name, command_line, byref(process_sec), byref(thread_sec), False, flags, 0, LPCSTR(0), byref(startup_info), byref(process_info))
+    if not success:
+        report_last_error()
+        return None
+    else:
+        CloseHandle(process_info.hProcess)
+        CloseHandle(process_info.hThread)
+        return process_info.dwProcessId
 
 
 def TerminateProcess(process_handle, exit_code):
