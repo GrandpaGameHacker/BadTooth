@@ -40,6 +40,7 @@ class Process(object):
         self.mode = self.is_32bit()
         self.patches = {}
         self.hooks = {}
+        self.injected_threads = []
         self.asm = Asm(self.mode)
         self.dsm = Dsm(self.mode)
 
@@ -283,7 +284,16 @@ class Process(object):
         Process.create_thread(address) -> thread_handle: HANDLE
         Process.create_thread(address, parameter=0) -> thread_handle: HANDLE
         """
-        return kernel32.CreateRemoteThreadEx(self.handle, address, parameter)
+        thread = kernel32.CreateRemoteThreadEx(self.handle, address, parameter)
+        self.injected_threads.append(thread)
+
+    def are_inject_threads_done(self):
+        for thread in self.injected_threads:
+            retval = kernel32.WaitForSingleObject(thread, 0)
+            if retval == winnt_constants.WAIT_TIMEOUT:
+                return False
+            else:
+                self.injected_threads.remove(thread)
 
     def add_patch(self, patch_name, address, instructions):
         """
