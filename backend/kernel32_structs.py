@@ -33,10 +33,12 @@ class PROCESSENTRY32(Structure):
         ("szExeFile", CHAR * 260)  # MAX_PATH
     ]
 
-    def get_name(self):
+    @property
+    def name(self):
         return self.szExeFile.decode("ASCII")
 
-    def get_pid(self):
+    @property
+    def pid(self):
         return self.th32ProcessID
 
 
@@ -54,23 +56,28 @@ class MODULEENTRY32(Structure):
         ("szExePath", CHAR * 260)
     ]
 
-    def get_name(self):
+    @property
+    def name(self):
         return self.szModule.decode("ASCII")
 
-    def get_path(self):
+    @property
+    def patch(self):
         return self.szExePath.decode("ASCII")
 
-    def get_base_address(self):
+    @property
+    def base_address(self):
         return addressof(self.modBaseAddr.contents)
 
-    def get_end_address(self):
+    @property
+    def end_address(self):
         return addressof(self.modBaseAddr.contents) + self.modBaseSize - 1
 
     def get_memory_range(self):
-        mem_range = (self.get_base_address(), self.modBaseSize - 1)
+        mem_range = (self.base_address, self.modBaseSize - 1)
         return mem_range
 
-    def get_size(self):
+    @property
+    def size(self):
         return self.modBaseSize
 
 
@@ -85,10 +92,12 @@ class THREADENTRY32(Structure):
         ("dwFlags", DWORD)
     ]
 
-    def get_tid(self):
+    @property
+    def tid(self):
         return self.th32ThreadID
 
-    def get_owner_pid(self):
+    @property
+    def owner_pid(self):
         return self.th32OwnerProcessID
 
 
@@ -117,17 +126,20 @@ class MEMORY_BASIC_INFORMATION(Structure):
         ("Protect", DWORD),
         ("Type", DWORD)]
 
-    def get_base_address(self):
+    @property
+    def base_address(self):
         return self.BaseAddress
 
-    def get_end_address(self):
+    @property
+    def end_address(self):
         return self.BaseAddress + self.RegionSize
 
     def get_memory_range(self):
-        mem_range = (self.get_base_address(), self.RegionSize)
+        mem_range = (self.base_address, self.RegionSize)
         return mem_range
 
-    def get_protect(self):
+    @property
+    def protection(self):
         protect = self.Protect
         guarded = False
         if protect & PAGE_GUARD:

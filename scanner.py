@@ -9,8 +9,8 @@ class Scanner():
 
     def __init__(self, process_name):
         self.process_entry = get_process_first(process_name)
-        self.process = Process(self.process_entry.get_pid())
-        self.process_name = self.process_entry.get_name()
+        self.process = Process(self.process_entry.owner_pid)
+        self.process_name = self.process_entry.name
         # scan settings
         self.min_address = 0
         self.max_address = 0x00007fffffffffff
@@ -68,8 +68,8 @@ class Scanner():
 
     def scan_module_aob(self, module, value):
         module_entry = self.process.get_module_by_name(module)
-        self.min_address = module_entry.get_base_address()
-        self.max_address = module_entry.get_end_address()
+        self.min_address = module_entry.base_address
+        self.max_address = module_entry.end_address
         result = self.scan_aob(value)
         self.reset_range()
         return result

@@ -27,7 +27,7 @@ def yield_processes():
 
 def get_process_first(process_name):
     for process in yield_processes():
-        curr_process_name = process.get_name().lower()
+        curr_process_name = process.name.lower()
         if curr_process_name.find(process_name.lower()) != -1:
             return process
 
@@ -35,7 +35,7 @@ def get_process_first(process_name):
 def get_processes(process_name):
     process_list = []
     for process in yield_processes():
-        curr_process_name = process.get_name().lower()
+        curr_process_name = process.name.lower()
         if curr_process_name.find(process_name.lower()) != -1:
             process_list.append(process)
     return process_list
@@ -72,7 +72,7 @@ class Process(object):
         if type(process) == str:
             proc = get_process_first(process)
             if proc is not None:
-                self.process_id = proc.get_pid()
+                self.process_id = proc.pid
                 self.handle = kernel32.OpenProcess(self.process_id)
                 self.failed = False
             else:
@@ -198,10 +198,10 @@ class Process(object):
         h_snapshot = kernel32.CreateToolhelp32Snapshot(
             winnt_constants.TH32CS_SNAPTHREAD, 0)
         thread_entry = kernel32.Thread32First(h_snapshot)
-        if thread_entry.get_owner_pid() == self.process_id:
+        if thread_entry.owner_pid == self.process_id:
             yield thread_entry
         while kernel32.Thread32Next(h_snapshot, thread_entry):
-            if thread_entry.get_owner_pid() == self.process_id:
+            if thread_entry.owner_pid == self.process_id:
                 yield thread_entry
 
     def suspend(self):
@@ -211,7 +211,7 @@ class Process(object):
         Process.suspend() -> None
         """
         for thread in self.yield_threads():
-            thread_handle = kernel32.OpenThread(thread.get_tid())
+            thread_handle = kernel32.OpenThread(thread.tid)
             kernel32.SuspendThread(thread_handle)
             kernel32.CloseHandle(thread_handle)
 
@@ -222,7 +222,7 @@ class Process(object):
         Process.suspend() -> None
         """
         for thread in self.yield_threads():
-            thread_handle = kernel32.OpenThread(thread.get_tid())
+            thread_handle = kernel32.OpenThread(thread.tid)
             kernel32.ResumeThread(thread_handle)
             kernel32.CloseHandle(thread_handle)
 
@@ -245,7 +245,7 @@ class Process(object):
         module_name = module_name.lower()
         module_gen = self.yield_modules()
         for module in module_gen:
-            curr_module_name = module.get_name().lower()
+            curr_module_name = module.name.lower()
             if curr_module_name.find(module_name) != -1:
                 return module
 
