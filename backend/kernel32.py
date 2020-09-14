@@ -448,12 +448,11 @@ def DebugBreakProcess(process_handle):
     return success
 
 
-def WaitForDebugEvent(milliseconds):
-    debug_event = DEBUG_EVENT()
+def WaitForDebugEvent(debug_event, milliseconds):
     success = __WaitForDebugEvent(byref(debug_event), milliseconds)
     if not success:
         report_last_error()
-    return debug_event
+    return success
 
 
 def ContinueDebugEvent(process_id, thread_id, continue_status):

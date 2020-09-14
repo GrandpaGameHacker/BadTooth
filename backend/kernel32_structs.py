@@ -235,7 +235,7 @@ class UNLOAD_DLL_DEBUG_INFO(Structure):
 
 class OUTPUT_DEBUG_STRING_INFO(Structure):
     _fields_ = [
-        ("lpDebugStringData", LPSTR),
+        ("lpDebugStringData", QWORD),
         ("fUnicode", WORD),
         ("nDebugStringLength", WORD)
     ]
