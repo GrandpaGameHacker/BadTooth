@@ -2,3 +2,4 @@ from .memory import Process, ProcessWatcher, get_process_first, get_processes, e
 from .winnt_constants import *
 from .entropy import entropy, entropy_series
 from .x86 import Asm, Dsm
+from .debugger import Debugger

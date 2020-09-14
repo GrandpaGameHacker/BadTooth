@@ -120,7 +120,7 @@ __CreateProcessA.argtypes = [LPCSTR, LPSTR, POINTER(SECURITY_ATTRIBUTES),
                              ]
 __CreateProcessA.restype = BOOL
 
-# debugging
+# debugging and thread_hijack
 __DebugActiveProcess = kernel32.DebugActiveProcess
 __DebugActiveProcess.argtypes = [DWORD]
 __DebugActiveProcess.restype = BOOL
@@ -129,12 +129,21 @@ __DebugActiveProcessStop = kernel32.DebugActiveProcessStop
 __DebugActiveProcessStop.argtypes = [DWORD]
 __DebugActiveProcessStop.restype = BOOL
 
+__DebugBreakProcess = kernel32.DebugBreakProcess
+__DebugBreakProcess.argtypes = [HANDLE]
+__DebugBreakProcess.restype = BOOL
+
+DebugSetProcessKillOnExit = kernel32.DebugSetProcessKillOnExit
+DebugSetProcessKillOnExit.argtypes = [BOOL]
+DebugSetProcessKillOnExit.restype = BOOL
+
 __ContinueDebugEvent = kernel32.ContinueDebugEvent
 __ContinueDebugEvent.argtypes = [DWORD, DWORD, DWORD]
 __ContinueDebugEvent.restype = BOOL
 
 __WaitForDebugEvent = kernel32.WaitForDebugEvent
-#__WaitForDebugEvent.argtypes = []
+__WaitForDebugEvent.argtypes = [POINTER(DEBUG_EVENT), DWORD]
+__WaitForDebugEvent.restype = BOOL
 
 __GetThreadContext = kernel32.GetThreadContext
 __GetThreadContext.argtypes = [DWORD, POINTER(CONTEXT64)]
@@ -150,6 +159,11 @@ __Wow64GetThreadContext.restype = BOOL
 
 __Wow64SetThreadContext = kernel32.Wow64SetThreadContext
 __Wow64SetThreadContext.argtypes = [HANDLE, POINTER(CONTEXT32)]
+
+__FlushInstructionCache = kernel32.FlushInstructionCache
+__FlushInstructionCache.argtypes = [HANDLE, LPCVOID, c_size_t]
+__FlushInstructionCache.restype = BOOL
+
 # external api
 
 
@@ -411,3 +425,46 @@ def SetThreadContext(is_32bit, thread_handle, thread_context):
     if not result:
         report_last_error()
     return result
+
+
+def DebugActiveProcess(process_id):
+    success = __DebugActiveProcess(process_id)
+    if not success:
+        report_last_error()
+    return success
+
+
+def DebugActiveProcessStop(process_id):
+    success = __DebugActiveProcessStop(process_id)
+    if not success:
+        report_last_error()
+    return success
+
+
+def DebugBreakProcess(process_handle):
+    success = __DebugBreakProcess(process_handle)
+    if not success:
+        report_last_error()
+    return success
+
+
+def WaitForDebugEvent(milliseconds):
+    debug_event = DEBUG_EVENT()
+    success = __WaitForDebugEvent(byref(debug_event), milliseconds)
+    if not success:
+        report_last_error()
+    return debug_event
+
+
+def ContinueDebugEvent(process_id, thread_id, continue_status):
+    success = __ContinueDebugEvent(process_id, thread_id, continue_status)
+    if not success:
+        report_last_error()
+    return success
+
+
+def FlushInstructionCache(process_handle):
+    success = __FlushInstructionCache(process_handle, 0, 0)
+    if not success:
+        report_last_error()
+    return success

@@ -1,0 +1,4 @@
+typedef struct _RIP_INFO {
+  DWORD dwError;
+  DWORD dwType;
+} RIP_INFO, *LPRIP_INFO;

@@ -148,6 +148,136 @@ class MEMORY_BASIC_INFORMATION(Structure):
             return True
 
 
+class EXCEPTION_RECORD(Structure):
+    pass
+
+
+EXCEPTION_RECORD._fields_ = [
+    ("ExceptionCode", DWORD),
+    ("ExceptionFlags", DWORD),
+    ("ExceptionRecord", POINTER(EXCEPTION_RECORD)),
+    ("ExceptionAddress", c_void_p),
+    ("NumberParameters", DWORD),
+    ("ExceptionInformation", POINTER(ULONG))
+]
+
+
+class EXCEPTION_DEBUG_INFO(Structure):
+    _fields_ = [
+        ("ExceptionRecord", EXCEPTION_RECORD),
+        ("dwFirstChance", DWORD)
+    ]
+
+
+class CREATE_THREAD_DEBUG_INFO(Structure):
+    _fields_ = [
+        ("hThread", HANDLE),
+        ("lpThreadLocalBase", LPVOID),
+        ("lpStartAddress", LPVOID)
+    ]
+
+
+class CREATE_PROCESS_DEBUG_INFO(Structure):
+    _fields_ = [
+        ("hFile", HANDLE),
+        ("hProcess", HANDLE),
+        ("hThread", HANDLE),
+        ("lpBaseOfImage", LPVOID),
+        ("dwDebugInfoFileOffset", DWORD),
+        ("nDebugInfoSize", DWORD),
+        ("lpThreadLocalBase", LPVOID),
+        ("lpStartAddress", LPVOID),
+        ("lpImageName", LPVOID),
+        ("fUnicode", WORD)
+    ]
+
+
+class EXIT_THREAD_DEBUG_INFO(Structure):
+    _fields_ = [
+        ("dwExitCode", DWORD)
+    ]
+
+
+class EXIT_PROCESS_DEBUG_INFO(Structure):
+    _fields_ = [
+        ("dwExitCode", DWORD)
+    ]
+
+
+class LOAD_DLL_DEBUG_INFO(Structure):
+    _fields_ = [
+        ("hFile", HANDLE),
+        ("lpBaseOfDll", LPVOID),
+        ("dwDebugInfoFileOffset", DWORD),
+        ("nDebugInfoSize", DWORD),
+        ("lpImageName", LPVOID),
+        ("fUnicode", WORD)
+    ]
+
+
+class UNLOAD_DLL_DEBUG_INFO(Structure):
+    _fields_ = [
+        ("lpBaseOfDll", LPVOID)
+    ]
+
+
+class OUTPUT_DEBUG_STRING_INFO(Structure):
+    _fields_ = [
+        ("lpDebugStringData", LPSTR),
+        ("fUnicode", WORD),
+        ("nDebugStringLength", WORD)
+    ]
+
+
+class RIP_INFO(Structure):
+    _fields_ = [
+        ("dwError", DWORD),
+        ("dwType", DWORD)
+    ]
+
+
+class DEBUG_EVENT_UNION(Union):
+    _fields_ = [
+        ("Exception", EXCEPTION_DEBUG_INFO),
+        ("CreateThread", CREATE_THREAD_DEBUG_INFO),
+        ("CreateProcessInfo", CREATE_PROCESS_DEBUG_INFO),
+        ("ExitThread", EXIT_THREAD_DEBUG_INFO),
+        ("ExitProcess", EXIT_PROCESS_DEBUG_INFO),
+        ("LoadDll", LOAD_DLL_DEBUG_INFO),
+        ("UnloadDll", UNLOAD_DLL_DEBUG_INFO),
+        ("DebugString", OUTPUT_DEBUG_STRING_INFO),
+        ("RipInfo", RIP_INFO),
+    ]
+
+
+class DEBUG_EVENT(Structure):
+    _fields_ = [
+        ("dwDebugEventCode", DWORD),
+        ("dwProcessId", DWORD),
+        ("dwThreadId", DWORD),
+        ("u", DEBUG_EVENT_UNION)
+    ]
+
+    @property
+    def event_code(self):
+        return self.dwDebugEventCode
+
+    @property
+    def process_id(self):
+        return self.dwProcessId
+
+    @property
+    def thread_id(self):
+        return self.dwThreadId
+
+    @property
+    def exception_code(self):
+        return self.u.Exception.ExceptionRecord.ExceptionCode
+
+
+# intel 32bit
+
+
 class WOW64_FLOATING_SAVE_AREA(Structure):
     _fields_ = [
         ("ControlWord", DWORD),
@@ -160,9 +290,6 @@ class WOW64_FLOATING_SAVE_AREA(Structure):
         ("RegisterArea", BYTE * 80),
         ("Cr0NpxState", DWORD)
     ]
-
-
-# intel 32bit
 
 
 class CONTEXT32(Structure):
@@ -194,7 +321,6 @@ class CONTEXT32(Structure):
         ("SegSs", DWORD),
         ("ExtendedRegisters", BYTE * 512)
     ]
-
 
 
 # intel 64bit
