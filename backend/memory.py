@@ -3,6 +3,47 @@ from . import ntdll
 from . import winnt_constants
 from .x86 import Dsm, Asm
 import struct
+import time
+
+
+def start(app_name, command_line):
+    process_id = kernel32.CreateProcess(app_name, command_line, 0)
+    return Process(process_id)
+
+
+def start_suspended(app_name, command_line):
+    process_id = kernel32.CreateProcess(app_name, command_line, winnt_constants.CREATE_SUSPENDED)
+    return Process(process_id)
+
+
+def yield_processes():
+    h_snapshot = kernel32.CreateToolhelp32Snapshot(
+        winnt_constants.TH32CS_SNAPPROCESS, 0)
+    proc_entry = kernel32.Process32First(h_snapshot)
+    yield proc_entry
+    while kernel32.Process32Next(h_snapshot, proc_entry):
+        yield proc_entry
+
+
+def get_process_first(process_name):
+    for process in yield_processes():
+        curr_process_name = process.get_name().lower()
+        if curr_process_name.find(process_name.lower()) != -1:
+            return process
+
+
+def get_processes(process_name):
+    process_list = []
+    for process in yield_processes():
+        curr_process_name = process.get_name().lower()
+        if curr_process_name.find(process_name.lower()) != -1:
+            process_list.append(process)
+    return process_list
+
+
+def enable_se_debug():
+    ntdll.AdjustPrivilege(
+        ntdll.SE_DEBUG_PRIVILEGE, True)
 
 
 class Process(object):
@@ -30,13 +71,13 @@ class Process(object):
             self.handle = kernel32.OpenProcess(self.process_id)
         if type(process) == str:
             proc = get_process_first(process)
-            if proc != None:
+            if proc is not None:
                 self.process_id = proc.get_pid()
                 self.handle = kernel32.OpenProcess(self.process_id)
                 self.failed = False
             else:
                 self.failed = True
-                return None
+                return
         self.mode = self.is_32bit()
         self.patches = {}
         self.hooks = {}
@@ -50,14 +91,6 @@ class Process(object):
         """
         if 'handle' in dir(self):
             kernel32.CloseHandle(self.handle)
-
-    def start(app_name, command_line):
-        process_id = kernel32.CreateProcess(app_name, command_line, 0)
-        return Process(process_id)
-
-    def start_suspended(app_name, command_line):
-        process_id = kernel32.CreateProcess(app_name, command_line, winnt_constants.CREATE_SUSPENDED)
-        return Process(process_id)
 
     def is_alive(self):
         alive = kernel32.WaitForSingleObject(self.handle, 0)
@@ -222,7 +255,8 @@ class Process(object):
         Each region is a MEMORY_BASIC_INFORMATION structure object
         Regions belong to the target process
 
-        Process.yield_regions(min_address = None, max_address = None, state=None, protect=None, m_type = None) -> Generator(kernel32.MEMORY_BASIC_INFORMATION)]
+        Process.yield_regions(min_address = None, max_address = None, state=None, protect=None, m_type = None) ->
+        Generator(kernel32.MEMORY_BASIC_INFORMATION)]
 
         Each overload (min_address, max_address, state, protect, m_type) allows you to filter for certain
         types of memory, you can have any combination of the five filters.
@@ -326,8 +360,8 @@ class Process(object):
         self.write(patch_address, old_data)
         self.patches[patch_name] = (patch_address, patch_instructions)
 
-# plan to simplify the hook engine by stubbing out some of the repeated code and making
-# it into separate functions. e.g. get_instr_len(hook_address, max, read_size)
+    # plan to simplify the hook engine by stubbing out some of the repeated code and making
+    # it into separate functions. e.g. get_instr_len(hook_address, max, read_size)
 
     def detour_hook(self, target_address, hook_address):
         if self.mode:
@@ -358,6 +392,7 @@ class Process(object):
             return old_bytes
 
     def add_hook(self, hook_name, hook_address, assembly_code):
+        injected_code = b''
         if type(assembly_code) == str:
             injected_code = self.asm.assemble(assembly_code)
         elif type(assembly_code) == bytes or type(assembly_code) == bytearray:
@@ -366,14 +401,12 @@ class Process(object):
         target_address = self.alloc_rwx(len(injected_code))
         if self.mode:
             instr_data = self.read(hook_address, 30)
-            instr_length = self.dsm.get_instr_length(instr_data, hook_address, 5)
             hook_relative = hook_address - (target_address + len(injected_code))
-            new_code = injected_code + b'\xE9' + struct.pack("i", hook_relative)
+            injected_code += b'\xE9' + struct.pack("i", hook_relative)
         else:
             instr_data = self.read(hook_address, 30)
-            instr_length = self.dsm.get_instr_length(instr_data, hook_address, 14)
-            injected_code = injected_code + b'\xFF\x25\x00\x00\x00\x00' + \
-                       struct.pack("Q", hook_address + 14)
+            injected_code += b'\xFF\x25\x00\x00\x00\x00'
+            injected_code += struct.pack("Q", hook_address + 14)
         self.write(target_address, injected_code)
         old_bytes = self.detour_hook(
             target_address, hook_address)
@@ -395,13 +428,16 @@ class Process(object):
         self.write(path_internal, bytes(dll_path, "ASCII"))
         self.create_thread(load_lib, parameter=path_internal)
 
-class ProcessWatcher:
+
+class ProcessWatcher(object):
     def __init__(self, process):
         self.process = process
+        self.proc = None
+        self.attached = False
 
     def wait_for(self):
         proc = Process(self.process)
-        while proc.failed == True:
+        while proc.failed:
             proc = Process(self.process)
         self.proc = proc
         self.attached = True
@@ -418,42 +454,11 @@ class ProcessWatcher:
         self.proc.resume()
 
     def watch_address(self, address, size):
-        original_bytes = self.read(address, size)
+        original_bytes = self.proc.read(address, size)
         changed = False
         while not changed:
             time.sleep(0.05)
-            curr_bytes = self.read(address, size)
+            curr_bytes = self.proc.read(address, size)
             if curr_bytes != original_bytes:
                 changed = True
         return True
-
-
-
-def yield_processes():
-    h_snapshot = kernel32.CreateToolhelp32Snapshot(
-        winnt_constants.TH32CS_SNAPPROCESS, 0)
-    proc_entry = kernel32.Process32First(h_snapshot)
-    yield proc_entry
-    while kernel32.Process32Next(h_snapshot, proc_entry):
-        yield proc_entry
-
-
-def get_process_first(process_name):
-    for process in yield_processes():
-        curr_process_name = process.get_name().lower()
-        if curr_process_name.find(process_name.lower()) != -1:
-            return process
-
-
-def get_processes(process_name):
-    process_list = []
-    for process in yield_processes():
-        curr_process_name = process.get_name().lower()
-        if curr_process_name.find(process_name.lower()) != -1:
-            process_list.append(process)
-    return process_list
-
-
-def enable_se_debug():
-    ntdll.AdjustPrivilege(
-        ntdll.SE_DEBUG_PRIVILEGE, True)

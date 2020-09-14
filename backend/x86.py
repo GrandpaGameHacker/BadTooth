@@ -19,7 +19,10 @@ class Asm:
         Generates machine code from instructions
         assemble(code: str) -> bytes
         """
-        return bytes(self.ks.asm(code)[0])
+        try:
+            return bytes(self.ks.asm(code)[0])
+        except KsError as e:
+            print(f"keystone-error: {e}")
 
 
 class Dsm:
@@ -84,7 +87,7 @@ class Dsm:
         """
         self.cs.detail = False
 
-    def get_instr_length(code, address, max_len):
+    def get_instr_length(self, code, address, max_len):
         disassembly = self.dis_lite(code, address)
         instr_length = 0
         for instr in disassembly:

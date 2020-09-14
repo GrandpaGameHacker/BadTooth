@@ -177,71 +177,71 @@ def GetProcAddress(module_handle, proc_name):
         return address
 
 
-def CreateToolhelp32Snapshot(dwFlags, th32ProcessID):
-    handle = __CreateToolhelp32Snapshot(dwFlags, th32ProcessID)
+def CreateToolhelp32Snapshot(flags, process_id):
+    handle = __CreateToolhelp32Snapshot(flags, process_id)
     if handle == winerror_constants.ERROR_INVALID_HANDLE:
         report_last_error()
     else:
         return handle
 
 
-def Process32First(hSnapshot):
+def Process32First(h_snapshot):
     process_entry = PROCESSENTRY32()
     process_entry.dwSize = sizeof(PROCESSENTRY32)
-    success = __Process32First(hSnapshot, byref(process_entry))
+    success = __Process32First(h_snapshot, byref(process_entry))
     if not success:
         report_last_error()
     else:
         return process_entry
 
 
-def Process32Next(hSnapshot, process_entry):
-    success = __Process32Next(hSnapshot, byref(process_entry))
+def Process32Next(h_snapshot, process_entry):
+    success = __Process32Next(h_snapshot, byref(process_entry))
     return success
 
 
-def Thread32First(hSnapshot):
+def Thread32First(h_snapshot):
     thread_entry = THREADENTRY32()
     thread_entry.dwSize = sizeof(THREADENTRY32)
-    success = __Thread32First(hSnapshot, byref(thread_entry))
+    success = __Thread32First(h_snapshot, byref(thread_entry))
     if not success:
         report_last_error()
     else:
         return thread_entry
 
 
-def Thread32Next(hSnapshot, thread_entry):
-    success = __Thread32Next(hSnapshot, byref(thread_entry))
+def Thread32Next(h_snapshot, thread_entry):
+    success = __Thread32Next(h_snapshot, byref(thread_entry))
     return success
 
 
-def Module32First(hSnapshot):
+def Module32First(h_snapshot):
     module_entry = MODULEENTRY32()
     module_entry.dwSize = sizeof(MODULEENTRY32)
-    success = __Module32First(hSnapshot, byref(module_entry))
+    success = __Module32First(h_snapshot, byref(module_entry))
     if not success:
         report_last_error()
     else:
         return module_entry
 
 
-def Module32Next(hSnapshot, module_entry):
-    success = __Module32Next(hSnapshot, byref(module_entry))
+def Module32Next(h_snapshot, module_entry):
+    success = __Module32Next(h_snapshot, byref(module_entry))
     return success
 
 
-def OpenProcess(pid, bInheritHandle=False):
+def OpenProcess(pid, b_inherit_handle=False):
     process_handle = __OpenProcess(
-        PROCESS_ALL_ACCESS, bInheritHandle, pid)
+        PROCESS_ALL_ACCESS, b_inherit_handle, pid)
 
     if process_handle == 0:
         report_last_error()
     return process_handle
 
 
-def OpenThread(tid, bInheritHandle=False):
+def OpenThread(tid, b_inherit_handle=False):
     thread_handle = __OpenThread(
-        THREAD_ALL_ACCESS, bInheritHandle, tid)
+        THREAD_ALL_ACCESS, b_inherit_handle, tid)
     if thread_handle == 0:
         report_last_error()
     return thread_handle
@@ -272,11 +272,11 @@ def CloseHandle(handle):
     return success
 
 
-def ReadProcessMemory(process_handle, address, nSize):
-    buffer = create_string_buffer(nSize)
+def ReadProcessMemory(process_handle, address, n_size):
+    buffer = create_string_buffer(n_size)
     bytes_read = c_size_t()
     success = __ReadProcessMemory(
-        process_handle, address, buffer, nSize, byref(bytes_read))
+        process_handle, address, buffer, n_size, byref(bytes_read))
     if not success:
         report_last_error()
     else:
