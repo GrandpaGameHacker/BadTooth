@@ -27,11 +27,12 @@ class Asm:
 
 class Dsm:
     """
-    Class to disassemble x86/x86-64 instructions
+    Class to disassemble x86/x86-64 instructions and perform operations with that data
     Dsm(mode_32: bool) -> Dsm
     """
 
     def __init__(self, mode_32):
+        self.mode = mode_32
         if mode_32:
             self.cs = Cs(CS_ARCH_X86, CS_MODE_32)
         else:
@@ -95,3 +96,11 @@ class Dsm:
             if instr_length >= max_len:
                 break
         return instr_length
+
+    def follow_branch(self, instr, address):
+        # intended to follow a jump/call instruction to its destination
+        pass
+
+    def follow_branch_lite(self, lite_instr, address):
+        # intended to follow a jump instruction to its destination
+        pass

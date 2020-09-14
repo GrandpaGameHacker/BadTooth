@@ -419,7 +419,7 @@ class Process(object):
         self.resume()
         self.hooks.pop(hook_name)
 
-    def basic_inject_dll(self, dll_path):
+    def inject_dll(self, dll_path):
         kernel32_handle = kernel32.GetModuleHandle("kernel32.dll")
         load_lib = kernel32.GetProcAddress(kernel32_handle, "LoadLibraryA")
         path_internal = self.alloc_rw(len(dll_path))
