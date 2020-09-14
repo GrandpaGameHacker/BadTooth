@@ -400,11 +400,9 @@ class Process(object):
         self.suspend()
         target_address = self.alloc_rwx(len(injected_code))
         if self.mode:
-            instr_data = self.read(hook_address, 30)
             hook_relative = hook_address - (target_address + len(injected_code))
             injected_code += b'\xE9' + struct.pack("i", hook_relative)
         else:
-            instr_data = self.read(hook_address, 30)
             injected_code += b'\xFF\x25\x00\x00\x00\x00'
             injected_code += struct.pack("Q", hook_address + 14)
         self.write(target_address, injected_code)
