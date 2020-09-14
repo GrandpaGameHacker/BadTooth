@@ -2,276 +2,12 @@ from ctypes import *
 from ctypes.wintypes import *
 from .winnt_constants import *
 from . import winerror_constants
-QWORD = c_longlong
+from . kernel32_structs import *
 kernel32 = WinDLL("kernel32", use_last_error=True)
 
 
 def report_last_error():
     print(WinError(get_last_error()))
-
-
-class SYSTEM_INFO(Structure):
-    _fields_ = [
-        ("dwOemId", DWORD),
-        ("dwPageSize", DWORD),
-        ("lpMinimumApplicationAddress", LPVOID),
-        ("lpMaximumApplicationAddress", LPVOID),
-        ("dwActiveProcessorMask", POINTER(DWORD)),
-        ("dwNumberOfProcessors", DWORD),
-        ("dwProcessorType", DWORD),
-        ("dwAllocationGranularity", DWORD),
-        ("wProcessorLevel", WORD),
-        ("wProcessorRevision", WORD),
-    ]
-
-
-class PROCESSENTRY32(Structure):
-    _fields_ = [
-        ("dwSize", DWORD),
-        ("cntUsage", DWORD),
-        ("th32ProcessID", DWORD),
-        ("th32DefaultHeapID", POINTER(ULONG)),
-        ("th32ModuleID", DWORD),
-        ("cntThreads", DWORD),
-        ("th32ParentProcessID", DWORD),
-        ("pcPriClassBase", LONG),
-        ("dwFlags", DWORD),
-        ("szExeFile", CHAR * 260)  # MAX_PATH
-    ]
-
-    def get_name(self):
-        return self.szExeFile.decode("ASCII")
-
-    def get_pid(self):
-        return self.th32ProcessID
-
-
-class MODULEENTRY32(Structure):
-    _fields_ = [
-        ("dwSize", DWORD),
-        ("th32ModuleID", DWORD),
-        ("th32ProcessID", DWORD),
-        ("GlblcntUsage", DWORD),
-        ("ProccntUsage", DWORD),
-        ("modBaseAddr", PBYTE),
-        ("modBaseSize", DWORD),
-        ("hModule", HMODULE),
-        ("szModule", CHAR * 256),
-        ("szExePath", CHAR * 260)
-    ]
-
-    def get_name(self):
-        return self.szModule.decode("ASCII")
-
-    def get_path(self):
-        return self.szExePath.decode("ASCII")
-
-    def get_base_address(self):
-        return addressof(self.modBaseAddr.contents)
-
-    def get_end_address(self):
-        return addressof(self.modBaseAddr.contents) + self.modBaseSize - 1
-
-    def get_memory_range(self):
-        mem_range = (self.get_base_address(), self.modBaseSize - 1)
-        return mem_range
-
-    def get_size(self):
-        return self.modBaseSize
-
-
-class THREADENTRY32(Structure):
-    _fields_ = [
-        ("dwSize", DWORD),
-        ("cntUsage", DWORD),
-        ("th32ThreadID", DWORD),
-        ("th32OwnerProcessID", DWORD),
-        ("tpBasePri", LONG),
-        ("tpDeltaPri", LONG),
-        ("dwFlags", DWORD)
-    ]
-
-    def get_tid(self):
-        return self.th32ThreadID
-
-    def get_owner_pid(self):
-        return self.th32OwnerProcessID
-
-
-protections = {
-    0: "invalid",
-    PAGE_READONLY: "r",
-    PAGE_READWRITE: "rw",
-    PAGE_WRITECOPY: "wc",
-    PAGE_WRITECOMBINE: "wc+",
-    PAGE_EXECUTE: "x",
-    PAGE_EXECUTE_READ: "rx",
-    PAGE_EXECUTE_READWRITE: "rwx",
-    PAGE_EXECUTE_WRITECOPY: "wcx",
-    PAGE_NOCACHE: "nc",
-    PAGE_NOACCESS: "n"
-}
-
-
-class MEMORY_BASIC_INFORMATION(Structure):
-    _fields_ = [
-        ("BaseAddress", c_void_p),
-        ("AllocationBase", c_void_p),
-        ("Allocationprotect", DWORD),
-        ("RegionSize", c_size_t),
-        ("State", DWORD),
-        ("Protect", DWORD),
-        ("Type", DWORD)]
-
-    def get_base_address(self):
-        return self.BaseAddress
-
-    def get_end_address(self):
-        return self.BaseAddress + self.RegionSize
-
-    def get_memory_range(self):
-        mem_range = (self.get_base_address(), self.RegionSize)
-        return mem_range
-
-    def get_protect(self):
-        protect = self.Protect
-        guarded = False
-        if protect & PAGE_GUARD:
-            protect = protect ^ PAGE_GUARD
-            guarded = True
-        protect_s = protections[protect]
-        if guarded:
-            protect_s += "g"
-        return protect_s
-
-    def is_readable(self):
-        protect = self.Protect
-        guarded = bool(protect & PAGE_GUARD)
-        noaccess = bool(protect & PAGE_NOACCESS)
-        if guarded or noaccess:
-            return False
-        else:
-            return True
-
-
-class FLOATING_SAVE_AREA(Structure):
-    _fields_ = [
-        ("ControlWord", ULONG),
-        ("StatusWord", ULONG),
-        ("TagWord", ULONG),
-        ("ErrorOffset", ULONG),
-        ("ErrorSelector", ULONG),
-        ("DataOffset", ULONG),
-        ("DataSelector", ULONG),
-        ("RegisterArea", CHAR * 80),
-        ("Cr0NpxState", ULONG)
-    ]
-
-# intel64
-
-
-class CONTEXT64(Structure):
-    _fields_ = [
-        ("P1Home", QWORD),
-        ("P2Home", QWORD),
-        ("P3Home", QWORD),
-        ("P4Home", QWORD),
-        ("P5Home", QWORD),
-        ("P6Home", QWORD),
-        ("ContextFlags", DWORD),
-        ("MxCsr", DWORD),
-        ("SegCs", WORD),
-        ("SegDs", WORD),
-        ("SegEs", WORD),
-        ("SegGs", WORD),
-        ("SegSs", WORD),
-        ("Dr0", QWORD),
-        ("Dr1", QWORD),
-        ("Dr2", QWORD),
-        ("Dr3", QWORD),
-        ("Dr6", QWORD),
-        ("Dr7", QWORD),
-        ("Rax", QWORD),
-        ("Rcx", QWORD),
-        ("Rdx", QWORD),
-        ("Rbx", QWORD),
-        ("Rsp", QWORD),
-        ("Rbp", QWORD),
-        ("Rsi", QWORD),
-        ("Rdi", QWORD),
-        ("R8", QWORD),
-        ("R9", QWORD),
-        ("R10", QWORD),
-        ("R11", QWORD),
-        ("R12", QWORD),
-        ("R13", QWORD),
-        ("R14", QWORD),
-        ("R15", QWORD),
-        ("Rip", QWORD),
-        ("Xmm0", c_float * 4),  # ugh
-        ("Xmm1", c_float * 4),
-        ("Xmm2", c_float * 4),
-        ("Xmm3", c_float * 4),
-        ("Xmm4", c_float * 4),
-        ("Xmm5", c_float * 4),
-        ("Xmm6", c_float * 4),
-        ("Xmm7", c_float * 4),
-        ("Xmm8", c_float * 4),
-        ("Xmm9", c_float * 4),
-        ("Xmm10", c_float * 4),
-        ("Xmm11", c_float * 4),
-        ("Xmm12", c_float * 4),
-        ("Xmm13", c_float * 4),
-        ("Xmm14", c_float * 4),
-        ("Xmm15", c_float * 4),
-        ("VectorRegister", c_float * 104),
-        ("VectorControl", QWORD),
-        ("DebugControl", QWORD),
-        ("LastBranchToRip", QWORD),
-        ("LastBranchFromRip", QWORD),
-        ("LastExceptionToRip", QWORD),
-        ("LastExceptionFromRip", QWORD)
-    ]
-
-
-class SECURITY_ATTRIBUTES(Structure):
-    _fields_ = [
-        ("nLength", DWORD),
-        ("lpSecurityDescriptor", LPVOID),
-        ("bInheritHandle", BOOL)
-    ]
-
-
-class STARTUPINFOA(Structure):
-    _fields_ = [
-        ("cb", DWORD),
-        ("lpReserved", LPSTR),
-        ("lpDesktop", LPSTR),
-        ("lpTitle", LPSTR),
-        ("dwX", DWORD),
-        ("dwY", DWORD),
-        ("dwXSize", DWORD),
-        ("dwYSize", DWORD),
-        ("dwXCountChars", DWORD),
-        ("dwYCountChars", DWORD),
-        ("dwFillAttribute", DWORD),
-        ("dwFlags", DWORD),
-        ("wShowWindow", WORD),
-        ("cbReserved2", WORD),
-        ("lpReserved2", LPBYTE),
-        ("hStdInput", HANDLE),
-        ("hStdOutput", HANDLE),
-        ("hStdError", HANDLE)
-    ]
-
-
-class PROCESS_INFORMATION(Structure):
-    _fields_ = [
-        ("hProcess", HANDLE),
-        ("hThread", HANDLE),
-        ("dwProcessId", DWORD),
-        ("dwThreadId", DWORD)
-    ]
 
 
 # internal function definitions
@@ -284,6 +20,8 @@ __GetProcAddress.restype = c_void_p
 __GetModuleHandle = kernel32.GetModuleHandleA
 __GetModuleHandle.argtypes = [LPCSTR]
 __GetModuleHandle.restype = HMODULE
+
+GetCurrentProcess = kernel32.GetCurrentProcess
 
 __OpenProcess = kernel32.OpenProcess
 
@@ -298,10 +36,6 @@ __SuspendThread.restype = DWORD
 __ResumeThread = kernel32.ResumeThread
 __ResumeThread.argtypes = [HANDLE]
 __ResumeThread.restype = DWORD
-
-__GetThreadContext = kernel32.GetThreadContext
-__GetThreadContext.argtypes = [HANDLE, POINTER(CONTEXT64)]
-__GetThreadContext.restype = BOOL
 
 __CloseHandle = kernel32.CloseHandle
 
@@ -401,6 +135,21 @@ __ContinueDebugEvent.restype = BOOL
 
 __WaitForDebugEvent = kernel32.WaitForDebugEvent
 #__WaitForDebugEvent.argtypes = []
+
+__GetThreadContext = kernel32.GetThreadContext
+__GetThreadContext.argtypes = [DWORD, POINTER(CONTEXT64)]
+__GetThreadContext.restype = BOOL
+
+__SetThreadContext = kernel32.SetThreadContext
+__SetThreadContext.argtypes = [HANDLE, POINTER(CONTEXT64)]
+__SetThreadContext.restype = BOOL
+
+__Wow64GetThreadContext = kernel32.Wow64GetThreadContext
+__Wow64GetThreadContext.argtypes = [DWORD, POINTER(CONTEXT32)]
+__Wow64GetThreadContext.restype = BOOL
+
+__Wow64SetThreadContext = kernel32.Wow64SetThreadContext
+__Wow64SetThreadContext.argtypes = [HANDLE, POINTER(CONTEXT32)]
 # external api
 
 
@@ -516,16 +265,6 @@ def ResumeThread(thread_handle):
         return False
 
 
-def GetThreadContext(thread_handle):
-    thread_context = CONTEXT64()
-    thread_context.ContextFlags = CONTEXT_FULL
-    result = __GetThreadContext(thread_handle, byref(thread_context))
-    if result:
-        return thread_context
-    else:
-        report_last_error()
-
-
 def CloseHandle(handle):
     success = __CloseHandle(handle)
     if not success:
@@ -629,7 +368,10 @@ def CreateProcess(application_name, command_line, flags):
     process_info = PROCESS_INFORMATION()
     application_name = c_char_p(application_name.encode("ASCII"))
     command_line = c_char_p(command_line.encode("ASCII"))
-    success = __CreateProcessA(application_name, command_line, byref(process_sec), byref(thread_sec), False, flags, 0, LPCSTR(0), byref(startup_info), byref(process_info))
+    success = __CreateProcessA(application_name, command_line,
+                               byref(process_sec),
+                               byref(thread_sec), False, flags, 0, LPCSTR(0),
+                               byref(startup_info), byref(process_info))
     if not success:
         report_last_error()
         return None
@@ -644,3 +386,28 @@ def TerminateProcess(process_handle, exit_code):
     if not success:
         report_last_error()
     return success
+
+
+def GetThreadContext(is_32bit, thread_handle):
+    if is_32bit:
+        thread_context = CONTEXT32()
+        thread_context.ContextFlags = CONTEXT_FULL
+        result = __Wow64GetThreadContext(thread_handle, byref(thread_context))
+    else:
+        thread_context = CONTEXT64()
+        thread_context.ContextFlags = CONTEXT_FULL
+        result = __GetThreadContext(thread_handle, byref(thread_context))
+    if result:
+        return thread_context
+    else:
+        report_last_error()
+
+
+def SetThreadContext(is_32bit, thread_handle, thread_context):
+    if is_32bit:
+        result = __Wow64SetThreadContext(thread_handle, thread_context)
+    else:
+        result = __SetThreadContext(thread_handle, thread_context)
+    if not result:
+        report_last_error()
+    return result
