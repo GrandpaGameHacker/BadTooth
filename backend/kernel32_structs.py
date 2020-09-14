@@ -61,7 +61,7 @@ class MODULEENTRY32(Structure):
         return self.szModule.decode("ASCII")
 
     @property
-    def patch(self):
+    def path(self):
         return self.szExePath.decode("ASCII")
 
     @property

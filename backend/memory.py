@@ -321,13 +321,15 @@ class Process(object):
         thread = kernel32.CreateRemoteThreadEx(self.handle, address, parameter)
         self.injected_threads.append(thread)
 
-    def are_inject_threads_done(self):
+    def created_threads_done(self):
+        threads_done = True
         for thread in self.injected_threads:
-            retval = kernel32.WaitForSingleObject(thread, 0)
-            if retval == winnt_constants.WAIT_TIMEOUT:
-                return False
+            event = kernel32.WaitForSingleObject(thread, 0)
+            if event == winnt_constants.WAIT_TIMEOUT:
+                threads_done = False
             else:
                 self.injected_threads.remove(thread)
+        return threads_done
 
     def add_patch(self, patch_name, address, instructions):
         """
