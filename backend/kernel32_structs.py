@@ -286,6 +286,10 @@ class DEBUG_EVENT(Structure):
     def exception_code(self):
         return self.u.Exception.ExceptionRecord.ExceptionCode
 
+    @property
+    def exception_address(self):
+        return self.u.Exception.ExceptionRecord.ExceptionAddress
+
 
 # intel 32bit
 
@@ -304,6 +308,48 @@ class WOW64_FLOATING_SAVE_AREA(Structure):
     ]
 
 
+class Dr7c(Structure):
+    _fields_ = [
+        ("l0", c_ulong, 1),
+        ("g0", c_ulong, 1),
+        ("l1", c_ulong, 1),
+        ("g1", c_ulong, 1),
+        ("l2", c_ulong, 1),
+        ("g2", c_ulong, 1),
+        ("l3", c_ulong, 1),
+        ("g3", c_ulong, 1),
+        ("le", c_ulong, 1),
+        ("ge", c_ulong, 1),
+        ("reserved1", c_ulong, 1),
+        ("rtm", c_ulong, 1),
+        ("reserved2", c_ulong, 1),
+        ("gd", c_ulong, 1),
+        ("reserved3", c_ulong, 2),
+        ("rw0", c_ulong, 2),
+        ("len0", c_ulong, 2),
+        ("rw1", c_ulong, 2),
+        ("len1", c_ulong, 2),
+        ("rw2", c_ulong, 2),
+        ("len2", c_ulong, 2),
+        ("rw3", c_ulong, 2),
+        ("len3", c_ulong, 2)
+    ]
+
+
+class Dr7u_32(Union):
+    _fields_ = [
+        ("all", DWORD),
+        ("fields", Dr7c)
+    ]
+
+
+class Dr7u_64(Union):
+    _fields_ = [
+        ("all", QWORD),
+        ("fields", Dr7c)
+    ]
+
+
 class CONTEXT32(Structure):
     _pack_ = 4
     _fields_ = [
@@ -313,7 +359,7 @@ class CONTEXT32(Structure):
         ("Dr2", DWORD),
         ("Dr3", DWORD),
         ("Dr6", DWORD),
-        ("Dr7", DWORD),
+        ("Dr7", Dr7u_32),
         ("FloatSave", WOW64_FLOATING_SAVE_AREA),
         ("SegGs", DWORD),
         ("SegFs", DWORD),
@@ -334,8 +380,16 @@ class CONTEXT32(Structure):
         ("ExtendedRegisters", BYTE * 512)
     ]
 
+    def clear_all_Drx(self):
+        self.Dr0 = 0
+        self.Dr1 = 0
+        self.Dr2 = 0
+        self.Dr3 = 0
+        self.Dr6 = 0
+        self.Dr7.all = 0
 
-# intel 64bit
+    # intel 64bit
+
 
 class CONTEXT64(Structure):
     _pack_ = 16
@@ -358,7 +412,7 @@ class CONTEXT64(Structure):
         ("Dr2", QWORD),
         ("Dr3", QWORD),
         ("Dr6", QWORD),
-        ("Dr7", QWORD),
+        ("Dr7", Dr7u_64),
         ("Rax", QWORD),
         ("Rcx", QWORD),
         ("Rdx", QWORD),
@@ -400,6 +454,13 @@ class CONTEXT64(Structure):
         ("LastExceptionToRip", QWORD),
         ("LastExceptionFromRip", QWORD)
     ]
+
+    def clear_all_Drx(self):
+        self.Dr0 = 0
+        self.Dr2 = 0
+        self.Dr3 = 0
+        self.Dr6 = 0
+        self.Dr7.all = 0
 
 
 class SECURITY_ATTRIBUTES(Structure):

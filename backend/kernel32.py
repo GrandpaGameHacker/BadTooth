@@ -405,11 +405,11 @@ def TerminateProcess(process_handle, exit_code):
 def GetThreadContext(is_32bit, thread_handle):
     if is_32bit:
         thread_context = CONTEXT32()
-        thread_context.ContextFlags = CONTEXT_FULL
+        thread_context.ContextFlags = CONTEXT_FULL | CONTEXT_DEBUG_REGISTERS
         result = __Wow64GetThreadContext(thread_handle, byref(thread_context))
     else:
         thread_context = CONTEXT64()
-        thread_context.ContextFlags = CONTEXT_FULL
+        thread_context.ContextFlags = CONTEXT_FULL | CONTEXT_DEBUG_REGISTERS
         result = __GetThreadContext(thread_handle, byref(thread_context))
     if result:
         return thread_context
