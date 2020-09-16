@@ -457,6 +457,7 @@ class CONTEXT64(Structure):
 
     def clear_all_Drx(self):
         self.Dr0 = 0
+        self.Dr1 = 0
         self.Dr2 = 0
         self.Dr3 = 0
         self.Dr6 = 0
