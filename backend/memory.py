@@ -237,15 +237,20 @@ class Process(object):
     def get_module_by_name(self, module_name):
         module_name = module_name.lower()
         module_gen = self.yield_modules()
-        for module in module_gen:
-            curr_module_name = module.name.lower()
+        for module_entry in module_gen:
+            curr_module_name = module_entry.name.lower()
             if curr_module_name.find(module_name) != -1:
-                return module
+                return module_entry
 
-    def get_module_pe_info(self, module_name):
+    def get_pe_info(self, module_name):
         module = self.get_module_by_name(module_name)
         pe = pefile.PE(module.path)
         return pe
+
+    def get_pe_info_memory(self, module_name):
+        module = self.get_module_by_name(module_name)
+        data = self.read(module.base_address, module.size)
+        return pefile.PE(data=data)
 
     def get_module_exports(self, module_name):
         export_dict = {}
@@ -254,7 +259,7 @@ class Process(object):
         pe.parse_data_directories()
         for export in pe.DIRECTORY_ENTRY_EXPORT.symbols:
             export_address = export.address + module.base_address
-            export_dict[export.name] = export_address
+            export_dict[export.name.decode("ASCII")] = export_address
         return export_dict
 
     def get_module_imports(self, module_name):
