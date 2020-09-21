@@ -1,4 +1,5 @@
-typedef struct _RIP_INFO {
-  DWORD dwError;
-  DWORD dwType;
-} RIP_INFO, *LPRIP_INFO;
+typedef struct _UNICODE_STRING {
+  USHORT Length;
+  USHORT MaximumLength;
+  PWSTR  Buffer;
+} UNICODE_STRING, *PUNICODE_STRING;

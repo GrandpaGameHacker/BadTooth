@@ -12,7 +12,6 @@ def report_last_error():
 
 # internal function definitions
 __GetSystemInfo = kernel32.GetSystemInfo
-
 __GetProcAddress = kernel32.GetProcAddress
 __GetProcAddress.argtypes = [HMODULE, LPCSTR]
 __GetProcAddress.restype = c_void_p

@@ -1,5 +1,6 @@
 from ctypes import *
 from ctypes.wintypes import *
+from .ntdll_structs import *
 
 SE_CREATE_TOKEN_PRIVILEGE = 2
 SE_ASSIGNPRIMARYTOKEN_PRIVILEGE = 3
@@ -51,6 +52,11 @@ __NtResumeProcess = ntdll.NtResumeProcess
 __NtResumeProcess.argtypes = [HANDLE]
 __NtResumeProcess.restype = DWORD
 
+__NtQueryInformationProcess = ntdll.NtQueryInformationProcess
+__NtQueryInformationProcess.argtypes = [HANDLE, DWORD, POINTER(PROCESS_BASIC_INFORMATION), ULONG, PULONG]
+
+__NtSetInformationProcess = ntdll.NtSetInformationProcess
+__NtSetInformationProcess.argtypes = [HANDLE, DWORD, POINTER(PROCESS_BASIC_INFORMATION), ULONG]
 
 def nt_success(nt_status):
     if 0 <= nt_status <= 0x3FFFFFFF:
@@ -89,6 +95,22 @@ def NtSuspendProcess(process_handle):
     nt_status = __NtSuspendProcess(process_handle)
     return nt_success(nt_status)
 
+
 def NtResumeProcess(process_handle):
     nt_status = __NtResumeProcess(process_handle)
+    return nt_success(nt_status)
+
+
+def NtQueryInformationProcess(process_handle):
+    process_info = PROCESS_BASIC_INFORMATION()
+    return_length = ULONG()
+    nt_status = __NtQueryInformationProcess(process_handle, 0, byref(process_info), sizeof(process_info),
+                                            byref(return_length))
+    if nt_success(nt_status):
+        return process_info
+
+
+def NtSetInformationProcess(process_handle, process_info):
+    assert type(process_info) == PROCESS_BASIC_INFORMATION
+    nt_status = __NtSetInformationProcess(process_handle, 0, byref(process_info), sizeof(process_info))
     return nt_success(nt_status)

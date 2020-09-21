@@ -248,14 +248,14 @@ class Process(object):
         return pe
 
     def get_module_exports(self, module_name):
-        export_list = []
+        export_dict = {}
         module = self.get_module_by_name(module_name)
         pe = pefile.PE(module.path)
         pe.parse_data_directories()
         for export in pe.DIRECTORY_ENTRY_EXPORT.symbols:
             export_address = export.address + module.base_address
-            export_list.append((export.name, export_address))
-        return export_list
+            export_dict[export.name] = export_address
+        return export_dict
 
     def get_module_imports(self, module_name):
         import_list = []
@@ -263,11 +263,11 @@ class Process(object):
         pe = pefile.PE(module.path)
         pe.parse_data_directories()
         for dll_entry in pe.DIRECTORY_ENTRY_IMPORT:
-            dll_import_list = []
+            dll_import_list = {}
             dll_name = dll_entry.dll.decode("ASCII")
             base_address = self.get_module_by_name(dll_name).base_address
             for import_entry in dll_entry.imports:
-                dll_import_list.append((import_entry.name, import_entry.address + base_address))
+                dll_import_list[import_entry.name] = import_entry.address + base_address
             import_list.append((dll_name, dll_import_list))
         return import_list
 

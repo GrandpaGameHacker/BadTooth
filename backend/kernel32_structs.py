@@ -1,6 +1,7 @@
 from ctypes import *
 from ctypes.wintypes import *
 from .winnt_constants import *
+
 QWORD = c_longlong
 
 
