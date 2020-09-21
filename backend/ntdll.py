@@ -43,6 +43,14 @@ __AdjustPrivilege = ntdll.RtlAdjustPrivilege
 __AdjustPrivilege.argtypes = [ULONG, BOOLEAN, BOOLEAN, POINTER(BOOLEAN)]
 __AdjustPrivilege.restype = DWORD  # NTSTATUS
 
+__NtSuspendProcess = ntdll.NtSuspendProcess
+__NtSuspendProcess.argtypes = [HANDLE]
+__NtSuspendProcess.restype = DWORD
+
+__NtResumeProcess = ntdll.NtResumeProcess
+__NtResumeProcess.argtypes = [HANDLE]
+__NtResumeProcess.restype = DWORD
+
 
 def NT_SUCCESS(Status):
     if Status >= 0 and Status <= 0x3FFFFFFF:
@@ -75,3 +83,9 @@ def NT_ERROR(Status):
 def AdjustPrivilege(privilege, bool_enable):
     return __AdjustPrivilege(privilege, bool_enable, 0, c_byte(False))
     # Returns NTSTATUS_SUCCESS on success, NTSTATUS code on failure.
+
+def NtSuspendProcess(process_handle):
+    return __NtSuspendProcess(process_handle)
+
+def NtResumeProcess(process_handle):
+    return __NtResumeProcess(process_handle)

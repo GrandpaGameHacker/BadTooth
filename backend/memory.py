@@ -187,22 +187,18 @@ class Process(object):
         """
         return kernel32.VirtualFreeEx(self.handle, address)
 
-    def yield_threads(self):
-        """
-        Yields threads one by one using a generator object
-        Each thread is a THREADENTRY32 structure object
-        Threads belong to the target process
-
-        Process.yield_threads() -> Generator(kernel32.THREADENTRY32)
-        """
+    def get_threads(self):
+        threads = []
         h_snapshot = kernel32.CreateToolhelp32Snapshot(
             winnt_constants.TH32CS_SNAPTHREAD, 0)
         thread_entry = kernel32.Thread32First(h_snapshot)
         if thread_entry.owner_pid == self.process_id:
-            yield thread_entry
+            threads.append(thread_entry)
         while kernel32.Thread32Next(h_snapshot, thread_entry):
             if thread_entry.owner_pid == self.process_id:
-                yield thread_entry
+                threads.append(thread_entry)
+        kernel32.CloseHandle(h_snapshot)
+        return threads
 
     def suspend(self):
         """
@@ -210,10 +206,7 @@ class Process(object):
 
         Process.suspend() -> None
         """
-        for thread in self.yield_threads():
-            thread_handle = kernel32.OpenThread(thread.tid)
-            kernel32.SuspendThread(thread_handle)
-            kernel32.CloseHandle(thread_handle)
+        ntdll.NtSuspendProcess(self.handle)
 
     def resume(self):
         """
@@ -221,10 +214,7 @@ class Process(object):
 
         Process.suspend() -> None
         """
-        for thread in self.yield_threads():
-            thread_handle = kernel32.OpenThread(thread.tid)
-            kernel32.ResumeThread(thread_handle)
-            kernel32.CloseHandle(thread_handle)
+        ntdll.NtResumeProcess(self.handle)
 
     def yield_modules(self):
         """

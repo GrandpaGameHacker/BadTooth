@@ -22,6 +22,7 @@ __GetModuleHandle.argtypes = [LPCSTR]
 __GetModuleHandle.restype = HMODULE
 
 GetCurrentProcess = kernel32.GetCurrentProcess
+GetCurrentProcessId = kernel32.GetCurrentProcessId
 
 __OpenProcess = kernel32.OpenProcess
 
@@ -58,7 +59,9 @@ __Module32First.restype = BOOL
 __Module32Next = kernel32.Module32Next
 __Module32Next.argtypes = [HANDLE, POINTER(MODULEENTRY32)]
 __Module32Next.restype = BOOL
-
+#
+# REPLACE SUSPEND/RESUME with NtSuspendProcess, NtResumeProcess (Speed problem)
+#
 __Thread32First = kernel32.Thread32First
 __Thread32First.argtypes = [HANDLE, POINTER(THREADENTRY32)]
 __Thread32First.restype = BOOL
@@ -163,7 +166,6 @@ __Wow64SetThreadContext.argtypes = [HANDLE, POINTER(CONTEXT32)]
 __FlushInstructionCache = kernel32.FlushInstructionCache
 __FlushInstructionCache.argtypes = [HANDLE, LPCVOID, c_size_t]
 __FlushInstructionCache.restype = BOOL
-
 # external api
 
 
