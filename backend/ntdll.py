@@ -52,40 +52,43 @@ __NtResumeProcess.argtypes = [HANDLE]
 __NtResumeProcess.restype = DWORD
 
 
-def NT_SUCCESS(Status):
-    if Status >= 0 and Status <= 0x3FFFFFFF:
+def nt_success(nt_status):
+    if 0 <= nt_status <= 0x3FFFFFFF:
         return True
     else:
         return False
 
 
-def NT_INFORMATION(Status):
-    if Status >= 0x40000000 and Status <= 0x7FFFFFFF:
+def nt_information(nt_status):
+    if 0x40000000 <= nt_status <= 0x7FFFFFFF:
         return True
     else:
         return False
 
 
-def NT_WARNING(Status):
-    if Status >= 0x80000000 and Status <= 0xBFFFFFFF:
+def nt_warning(nt_status):
+    if 0x80000000 <= nt_status <= 0xBFFFFFFF:
         return True
     else:
         return False
 
 
-def NT_ERROR(Status):
-    if Status >= 0xC0000000 and Status <= 0xFFFFFFFF:
+def nt_error(nt_status):
+    if 0xC0000000 <= nt_status <= 0xFFFFFFFF:
         return True
     else:
         return False
 
 
 def AdjustPrivilege(privilege, bool_enable):
-    return __AdjustPrivilege(privilege, bool_enable, 0, c_byte(False))
-    # Returns NTSTATUS_SUCCESS on success, NTSTATUS code on failure.
+    nt_status = __AdjustPrivilege(privilege, bool_enable, 0, c_byte(False))
+    return nt_success(nt_status)
+
 
 def NtSuspendProcess(process_handle):
-    return __NtSuspendProcess(process_handle)
+    nt_status = __NtSuspendProcess(process_handle)
+    return nt_success(nt_status)
 
 def NtResumeProcess(process_handle):
-    return __NtResumeProcess(process_handle)
+    nt_status = __NtResumeProcess(process_handle)
+    return nt_success(nt_status)

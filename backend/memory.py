@@ -2,8 +2,11 @@ from . import kernel32
 from . import ntdll
 from . import winnt_constants
 from .x86 import Dsm, Asm
+import pefile
 import struct
 import time
+
+pefile.fast_load = False
 
 
 def start(app_name, command_line):
@@ -204,17 +207,17 @@ class Process(object):
         """
         Suspends all running threads in target process
 
-        Process.suspend() -> None
+        Process.suspend() -> success: bool
         """
-        ntdll.NtSuspendProcess(self.handle)
+        return ntdll.NtSuspendProcess(self.handle)
 
     def resume(self):
         """
         Resumes all suspended threads in target process
 
-        Process.suspend() -> None
+        Process.suspend() -> success: bool
         """
-        ntdll.NtResumeProcess(self.handle)
+        return ntdll.NtResumeProcess(self.handle)
 
     def yield_modules(self):
         """
@@ -238,6 +241,11 @@ class Process(object):
             curr_module_name = module.name.lower()
             if curr_module_name.find(module_name) != -1:
                 return module
+
+    def get_module_pe_info(self, module_name):
+        module = self.get_module_by_name(module_name)
+        pe = pefile.PE(module.path)
+        return pe
 
     def yield_memory_regions(self, min_address=None, max_address=None, state=None, protect=None, m_type=None):
         """
