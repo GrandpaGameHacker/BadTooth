@@ -1,10 +1,18 @@
-import sys
 """Intended to help generate ctypes structs from Windows API Structures"""
+
+struct_data = """
+typedef struct _SECURITY_ATTRIBUTES {
+  DWORD  nLength;
+  LPVOID lpSecurityDescriptor;
+  BOOL   bInheritHandle;
+} SECURITY_ATTRIBUTES, *PSECURITY_ATTRIBUTES, *LPSECURITY_ATTRIBUTES;
+"""
 
 def convert_struct(struct_s):
     python_struct = "class "
     tab_str = "    "
     struct_lines = struct_s.splitlines()
+    struct_lines = struct_lines[1:]
     head = struct_lines[0]
     head = head.replace("typedef", "")
     head = head.replace("struct", "")
@@ -37,6 +45,4 @@ def convert_struct(struct_s):
     return python_struct
 
 
-with open(sys.argv[1]) as f:
-    struct_data = f.read()
-    print(convert_struct(struct_data))
+print(convert_struct(struct_data))

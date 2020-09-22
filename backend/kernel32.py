@@ -216,6 +216,10 @@ __CreateNamedPipeA = kernel32.CreateNamedPipeA
 __CreateNamedPipeA.argtypes = [LPCSTR, DWORD, DWORD, DWORD, DWORD, DWORD, DWORD, POINTER(SECURITY_ATTRIBUTES)]
 __CreateNamedPipeA.restype = HANDLE
 
+# PeekNamedPipe(hNamedPipe, lpBuffer, nBufferSize, lpBytesRead, lpTotalBytesAvail, lpBytesLeftThisMessage );
+__PeekNamedPipe = kernel32.PeekNamedPipe
+__PeekNamedPipe.argtypes = [HANDLE, LPVOID, DWORD, LPDWORD, LPDWORD, LPDWORD]
+__PeekNamedPipe.restype = BOOL
 
 # external api
 

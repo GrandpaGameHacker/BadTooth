@@ -1,18 +1,21 @@
 """Intended to help generate ctypes function definitions from Windows API definitions"""
 dll_name = "kernel32"
 
-function_to_convert = """LPVOID VirtualAllocEx(
-  HANDLE hProcess,
-  LPVOID lpAddress,
-  SIZE_T dwSize,
-  DWORD  flAllocationType,
-  DWORD  flProtect
+function_to_convert = """
+BOOL PeekNamedPipe(
+  HANDLE  hNamedPipe,
+  LPVOID  lpBuffer,
+  DWORD   nBufferSize,
+  LPDWORD lpBytesRead,
+  LPDWORD lpTotalBytesAvail,
+  LPDWORD lpBytesLeftThisMessage
 );
 """
 
 
 def convert_function(function_s):
     function_lines = function_s.splitlines()
+    function_lines = function_lines[1:]
     head = function_lines[0]
     args = function_lines[1:-1]
     restype, function_name = head.split(" ")
