@@ -1,5 +1,5 @@
 import sys
-
+"""Intended to help generate ctypes structs from Windows API Structures"""
 
 def convert_struct(struct_s):
     python_struct = "class "

@@ -20,6 +20,14 @@ class SYSTEM_INFO(Structure):
     ]
 
 
+class SECURITY_ATTRIBUTES(Structure):
+    _fields_ = [
+        ("nLength", DWORD),
+        ("lpSecurityDescriptor", LPVOID),
+        ("bInheritHandle", BOOL)
+    ]
+
+
 class PROCESSENTRY32(Structure):
     _fields_ = [
         ("dwSize", DWORD),
