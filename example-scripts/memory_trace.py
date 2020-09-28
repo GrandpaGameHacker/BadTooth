@@ -8,7 +8,7 @@ import code
 import time
 import struct
 
-from backend import *
+from badtooth import *
 
 
 def trace(address, size, wait=0.05):

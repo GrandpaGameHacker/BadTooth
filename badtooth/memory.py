@@ -123,7 +123,7 @@ class Process(object):
 
         address is the address in the process memory to read from
         n_bytes is the number of bytes to be read
-        If the backend api fails it can partially fail and return less bytes than intended.
+        If the badtooth api fails it can partially fail and return less bytes than intended.
         Will fail if memory range crosses into a PAGE_NOACCESS memory region etc.
         """
         return kernel32.ReadProcessMemory(self.handle, address, n_bytes)
