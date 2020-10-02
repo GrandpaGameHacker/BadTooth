@@ -10,16 +10,19 @@ pefile.fast_load = False
 
 
 def start(app_name, command_line):
+    """Start a process"""
     process_id = kernel32.CreateProcess(app_name, command_line, 0)
     return Process(process_id)
 
 
 def start_suspended(app_name, command_line):
+    """Start a process in suspended state"""
     process_id = kernel32.CreateProcess(app_name, command_line, winnt_constants.CREATE_SUSPENDED)
     return Process(process_id)
 
 
 def yield_processes():
+    """Get all running processes via snapshot"""
     h_snapshot = kernel32.CreateToolhelp32Snapshot(
         winnt_constants.TH32CS_SNAPPROCESS, 0)
     proc_entry = kernel32.Process32First(h_snapshot)
@@ -29,6 +32,7 @@ def yield_processes():
 
 
 def get_process_first(process_name):
+    """Returns the first process in the list that matches with the input string"""
     for process in yield_processes():
         curr_process_name = process.name.lower()
         if curr_process_name.find(process_name.lower()) != -1:
@@ -36,6 +40,7 @@ def get_process_first(process_name):
 
 
 def get_processes(process_name):
+    """returns a list of running processes that match the input string"""
     process_list = []
     for process in yield_processes():
         curr_process_name = process.name.lower()
@@ -45,6 +50,7 @@ def get_processes(process_name):
 
 
 def enable_se_debug():
+    """Enable debug privileges - warning! malicious scripts can abuse this
     ntdll.AdjustPrivilege(
         ntdll.SE_DEBUG_PRIVILEGE, True)
 
@@ -191,6 +197,8 @@ class Process(object):
         return kernel32.VirtualFreeEx(self.handle, address)
 
     def get_threads(self):
+        """Enumerate all threads in process
+        and returns a list"""
         threads = []
         h_snapshot = kernel32.CreateToolhelp32Snapshot(
             winnt_constants.TH32CS_SNAPTHREAD, 0)
@@ -234,7 +242,9 @@ class Process(object):
         while kernel32.Module32Next(h_snapshot, module_entry):
             yield module_entry
 
-    def get_module_by_name(self, module_name):
+    def get_module(self, module_name):
+        """Gets the MODULE_ENTRY_32 struct for
+        a specific module in the process"""
         module_name = module_name.lower()
         module_gen = self.yield_modules()
         for module_entry in module_gen:
@@ -243,18 +253,31 @@ class Process(object):
                 return module_entry
 
     def get_pe_info(self, module_name):
-        module = self.get_module_by_name(module_name)
+        """
+        Returns a PE object (pefile module) for a module
+        in the process
+        Grabs the data from file
+        """
+        module = self.get_module(module_name)
         pe = pefile.PE(module.path)
         return pe
 
     def get_pe_info_memory(self, module_name):
-        module = self.get_module_by_name(module_name)
+        """
+        Returns a PE object (pefile module) for a module
+        in the process
+        Grabs the data from memory
+        """
+        module = self.get_module(module_name)
         data = self.read(module.base_address, module.size)
         return pefile.PE(data=data)
 
-    def get_module_exports(self, module_name):
+    def get_exports(self, module_name):
+        """
+        Get all exports for specified module name in the process
+        """
         export_dict = {}
-        module = self.get_module_by_name(module_name)
+        module = self.get_module(module_name)
         pe = pefile.PE(module.path)
         pe.parse_data_directories()
         for export in pe.DIRECTORY_ENTRY_EXPORT.symbols:
@@ -262,15 +285,18 @@ class Process(object):
             export_dict[export.name.decode("ASCII")] = export_address
         return export_dict
 
-    def get_module_imports(self, module_name):
+    def get_imports(self, module_name):
+        """
+        Get all imports for specified module name in the process
+        """
         import_list = []
-        module = self.get_module_by_name(module_name)
+        module = self.get_module(module_name)
         pe = pefile.PE(module.path)
         pe.parse_data_directories()
         for dll_entry in pe.DIRECTORY_ENTRY_IMPORT:
             dll_import_list = {}
             dll_name = dll_entry.dll.decode("ASCII")
-            base_address = self.get_module_by_name(dll_name).base_address
+            base_address = self.get_module(dll_name).base_address
             for import_entry in dll_entry.imports:
                 dll_import_list[import_entry.name] = import_entry.address + base_address
             import_list.append((dll_name, dll_import_list))
@@ -441,6 +467,7 @@ class Process(object):
         self.hooks[hook_name] = (hook_address, old_bytes, target_address)
 
     def remove_hook(self, hook_name):
+        """Disable a hook and remove it from the list"""
         hook_address, old_bytes, target_address = self.hooks[hook_name]
         self.suspend()
         self.write(hook_address, old_bytes)
@@ -449,6 +476,11 @@ class Process(object):
         self.hooks.pop(hook_name)
 
     def inject_dll(self, dll_path):
+        """
+        Injects a dll into the process
+        This function uses LoadLibraryA and CreateRemoteThreadEx
+        which is very loud. Will not work against anti-cheats
+        """
         kernel32_handle = kernel32.GetModuleHandle("kernel32.dll")
         load_lib = kernel32.GetProcAddress(kernel32_handle, "LoadLibraryA")
         path_internal = self.alloc_rw(len(dll_path))
@@ -457,12 +489,13 @@ class Process(object):
 
 
 class ProcessWatcher(object):
-    def __init__(self, process):
+    def __init__(self, process: Process):
         self.process = process
         self.proc = None
         self.attached = False
 
     def wait_for(self):
+        """Wait for the process to start running"""
         proc = Process(self.process)
         while proc.failed:
             proc = Process(self.process)
@@ -471,16 +504,25 @@ class ProcessWatcher(object):
         return proc
 
     def is_alive(self):
+        """Check if process is still running"""
         return self.proc.is_alive()
 
     def wait_for_suspend(self):
+        """Wait for the process to start and immediately suspend it"""
         self.wait_for()
         self.proc.suspend()
 
     def resume(self):
+        """
+        Resume the process under watch
+        """
         self.proc.resume()
 
     def watch_address(self, address, size):
+        """
+        Sleeps the thread until memory region data changes
+        Useful for unpacker writing maybe?
+        """
         original_bytes = self.proc.read(address, size)
         changed = False
         while not changed:
@@ -488,4 +530,84 @@ class ProcessWatcher(object):
             curr_bytes = self.proc.read(address, size)
             if curr_bytes != original_bytes:
                 changed = True
+        return True
+
+# data types for the address/pointer classes
+c_boolean = '?'
+c_short = 'h'
+c_long = 'l'
+c_int = 'i'
+c_longlong = 'q'
+c_float = 'f'
+c_double = 'd'
+c_ushort = 'H'
+c_ulong = 'L'
+c_uint = 'I'
+c_ulonglong = 'Q'
+
+_c_types_ = {
+    c_boolean: 1,
+    c_short: 2,
+    c_long: 4,
+    c_int: 4,
+    c_longlong: 8,
+    c_float: 4,
+    c_double: 8,
+    c_ushort: 2,
+    c_ulong: 4,
+    c_uint: 4,
+    c_ulonglong: 8,
+}
+
+
+class Address:
+    def __init__(self, process: Process, address: int, c_type: str):
+        if not process.failed and process.is_alive():
+            self.handle = process.handle
+            self.address = address
+            self.size = _c_types_[c_type]
+            self.converter = struct.Struct(c_type)
+
+    def read(self):
+        """
+        Read a value from this address
+        """
+        data = kernel32.ReadProcessMemory(self.handle, self.address, self.size)
+        if data is None:
+            return None
+        if len(data) == self.size:
+            return self.converter.unpack(data)[0]
+        return None
+
+    def write(self, value):
+        """
+        Write a value to this address
+        """
+        data = self.converter.pack(value)
+        return kernel32.WriteProcessMemory(self.handle, self.address, data)
+
+
+class Pointer(Address):
+    def __init__(self, process: Process, base_address: int, offsets: list, c_type: str):
+        if not process.failed and process.is_alive():
+            super(Pointer, self).__init__(process, 0, c_type)
+            self.pointer_size = 4 if process.mode else 8
+            self.c_pointer = struct.Struct("I") if process.mode else struct.Struct("Q")
+            self.base_address = base_address
+            self.address = 0
+            self.offsets = offsets
+            self.resolve()
+
+    def resolve(self):
+        """
+        Updates the local pointer to the address of the remote memory
+        """
+        address = self.base_address
+        for offset in self.offsets:
+            data = kernel32.ReadProcessMemory(self.handle, address, self.pointer_size)
+            if data is None:
+                return False
+            address = self.c_pointer.unpack(data)[0]
+            address += offset
+        self.address = address
         return True
