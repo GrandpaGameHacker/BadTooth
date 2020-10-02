@@ -51,6 +51,8 @@ def get_processes(process_name):
 
 def enable_se_debug():
     """Enable debug privileges - warning! malicious scripts can abuse this
+    SE_DEBUG_PRIVILEGE allows this process to get handles to any process under any user
+    can only change the token when running under administrative rights"""
     ntdll.AdjustPrivilege(
         ntdll.SE_DEBUG_PRIVILEGE, True)
 
