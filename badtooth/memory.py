@@ -6,9 +6,40 @@ import pefile
 import struct
 import time
 from typing import Union
+from enum import Enum
 
 # by default load the entire PE file
 pefile.fast_load = False
+
+
+# data types for the address/pointer classes
+class CType(Enum):
+    c_boolean = '?'
+    c_short = 'h'
+    c_long = 'l'
+    c_int = 'i'
+    c_longlong = 'q'
+    c_float = 'f'
+    c_double = 'd'
+    c_ushort = 'H'
+    c_ulong = 'L'
+    c_uint = 'I'
+    c_ulonglong = 'Q'
+
+
+_c_type_sz_ = {
+    CType.c_boolean: 1,
+    CType.c_short: 2,
+    CType.c_long: 4,
+    CType.c_int: 4,
+    CType.c_longlong: 8,
+    CType.c_float: 4,
+    CType.c_double: 8,
+    CType.c_ushort: 2,
+    CType.c_ulong: 4,
+    CType.c_uint: 4,
+    CType.c_ulonglong: 8,
+}
 
 
 class Process(object):
@@ -463,6 +494,9 @@ class Process(object):
         self.write(path_internal, bytes(dll_path, "ASCII"))
         self.create_thread(load_lib, parameter=path_internal)
 
+    def address(self, address, c_type):
+        pass
+
 
 class ProcessWatcher(object):
     def __init__(self, process: Process):
@@ -509,41 +543,13 @@ class ProcessWatcher(object):
         return True
 
 
-# data types for the address/pointer classes
-c_boolean = '?'
-c_short = 'h'
-c_long = 'l'
-c_int = 'i'
-c_longlong = 'q'
-c_float = 'f'
-c_double = 'd'
-c_ushort = 'H'
-c_ulong = 'L'
-c_uint = 'I'
-c_ulonglong = 'Q'
-
-_c_types_ = {
-    c_boolean: 1,
-    c_short: 2,
-    c_long: 4,
-    c_int: 4,
-    c_longlong: 8,
-    c_float: 4,
-    c_double: 8,
-    c_ushort: 2,
-    c_ulong: 4,
-    c_uint: 4,
-    c_ulonglong: 8,
-}
-
-
 class Address(object):
-    def __init__(self, process: Process, address: int, c_type: str):
+    def __init__(self, process: Process, address: int, c_type: CType.enum_member):
         if not process.failed and process.is_alive():
             self.handle = process.handle
             self.address = address
-            self.size = _c_types_[c_type]
-            self.converter = struct.Struct(c_type)
+            self.size = _c_type_sz_[c_type.value]
+            self.converter = struct.Struct(c_type.value)
 
     def read(self):
         """
@@ -565,7 +571,7 @@ class Address(object):
 
 
 class Pointer(Address):
-    def __init__(self, process: Process, base_address: int, offsets: list, c_type: str):
+    def __init__(self, process: Process, base_address: int, offsets: list, c_type: CType.enum_member):
         if not process.failed and process.is_alive():
             super(Pointer, self).__init__(process, 0, c_type)
             self.pointer_size = 4 if process.mode else 8
