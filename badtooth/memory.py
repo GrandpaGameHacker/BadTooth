@@ -14,31 +14,32 @@ pefile.fast_load = False
 
 # data types for the address/pointer classes
 class CType(Enum):
-    c_boolean = '?'
-    c_short = 'h'
-    c_long = 'l'
-    c_int = 'i'
-    c_longlong = 'q'
-    c_float = 'f'
-    c_double = 'd'
-    c_ushort = 'H'
-    c_ulong = 'L'
-    c_uint = 'I'
-    c_ulonglong = 'Q'
+    boolean = '?'
+    short = 'h'
+    long = 'l'
+    int = 'i'
+    longlong = 'q'
+    float = 'f'
+    double = 'd'
+    u_short = 'H'
+    u_long = 'L'
+    u_int = 'I'
+    u_longlong = 'Q'
+
 
 
 _c_type_sz_ = {
-    CType.c_boolean: 1,
-    CType.c_short: 2,
-    CType.c_long: 4,
-    CType.c_int: 4,
-    CType.c_longlong: 8,
-    CType.c_float: 4,
-    CType.c_double: 8,
-    CType.c_ushort: 2,
-    CType.c_ulong: 4,
-    CType.c_uint: 4,
-    CType.c_ulonglong: 8,
+    CType.boolean: 1,
+    CType.short: 2,
+    CType.long: 4,
+    CType.int: 4,
+    CType.longlong: 8,
+    CType.float: 4,
+    CType.double: 8,
+    CType.u_short: 2,
+    CType.u_long: 4,
+    CType.u_int: 4,
+    CType.u_longlong: 8,
 }
 
 
@@ -107,6 +108,13 @@ class Process(object):
         Process.is_32bit() -> result: bool
         """
         return kernel32.IsWow64Process(self.handle)
+
+    def address(self, address: int, c_type):
+        """Create an Address object"""
+        return Address(self, address, c_type)
+
+    def pointer(self, base_address: int, offsets: list, c_type):
+        return Pointer(self, base_address, offsets, c_type)
 
     def read(self, address: int, n_bytes: int) -> bytearray:
         """
@@ -221,6 +229,8 @@ class Process(object):
         Modules belong to the target process
 
         Process.yield_modules() -> Generator(kernel32.MODULEENTRY32)
+
+        Only works if process is the same bits (32/64) as python instance!
         """
         h_snapshot = kernel32.CreateToolhelp32Snapshot(
             winnt_constants.TH32CS_SNAPMODULE, self.process_id)
@@ -231,7 +241,9 @@ class Process(object):
 
     def get_module(self, module_name: str) -> kernel32.MODULEENTRY32:
         """Gets the MODULE_ENTRY_32 struct for
-        a specific module in the process"""
+        a specific module in the process
+        Only works if process is the same bits (32/64) as python instance!
+        """
         module_name = module_name.lower()
         module_gen = self.yield_modules()
         for module_entry in module_gen:
@@ -494,9 +506,6 @@ class Process(object):
         self.write(path_internal, bytes(dll_path, "ASCII"))
         self.create_thread(load_lib, parameter=path_internal)
 
-    def address(self, address, c_type):
-        pass
-
 
 class ProcessWatcher(object):
     def __init__(self, process: Process):
@@ -544,11 +553,11 @@ class ProcessWatcher(object):
 
 
 class Address(object):
-    def __init__(self, process: Process, address: int, c_type: CType.enum_member):
+    def __init__(self, process: Process, address: int, c_type):
         if not process.failed and process.is_alive():
             self.handle = process.handle
             self.address = address
-            self.size = _c_type_sz_[c_type.value]
+            self.size = _c_type_sz_[c_type]
             self.converter = struct.Struct(c_type.value)
 
     def read(self):
@@ -571,7 +580,7 @@ class Address(object):
 
 
 class Pointer(Address):
-    def __init__(self, process: Process, base_address: int, offsets: list, c_type: CType.enum_member):
+    def __init__(self, process: Process, base_address: int, offsets: list, c_type):
         if not process.failed and process.is_alive():
             super(Pointer, self).__init__(process, 0, c_type)
             self.pointer_size = 4 if process.mode else 8
