@@ -5,56 +5,10 @@ from .x86 import Dsm, Asm
 import pefile
 import struct
 import time
+from typing import Union
 
+# by default load the entire PE file
 pefile.fast_load = False
-
-
-def start(app_name, command_line):
-    """Start a process"""
-    process_id = kernel32.CreateProcess(app_name, command_line, 0)
-    return Process(process_id)
-
-
-def start_suspended(app_name, command_line):
-    """Start a process in suspended state"""
-    process_id = kernel32.CreateProcess(app_name, command_line, winnt_constants.CREATE_SUSPENDED)
-    return Process(process_id)
-
-
-def yield_processes():
-    """Get all running processes via snapshot"""
-    h_snapshot = kernel32.CreateToolhelp32Snapshot(
-        winnt_constants.TH32CS_SNAPPROCESS, 0)
-    proc_entry = kernel32.Process32First(h_snapshot)
-    yield proc_entry
-    while kernel32.Process32Next(h_snapshot, proc_entry):
-        yield proc_entry
-
-
-def get_process_first(process_name):
-    """Returns the first process in the list that matches with the input string"""
-    for process in yield_processes():
-        curr_process_name = process.name.lower()
-        if curr_process_name.find(process_name.lower()) != -1:
-            return process
-
-
-def get_processes(process_name):
-    """returns a list of running processes that match the input string"""
-    process_list = []
-    for process in yield_processes():
-        curr_process_name = process.name.lower()
-        if curr_process_name.find(process_name.lower()) != -1:
-            process_list.append(process)
-    return process_list
-
-
-def enable_se_debug():
-    """Enable debug privileges - warning! malicious scripts can abuse this
-    SE_DEBUG_PRIVILEGE allows this process to get handles to any process under any user
-    can only change the token when running under administrative rights"""
-    ntdll.AdjustPrivilege(
-        ntdll.SE_DEBUG_PRIVILEGE, True)
 
 
 class Process(object):
@@ -103,17 +57,17 @@ class Process(object):
         if 'handle' in dir(self):
             kernel32.CloseHandle(self.handle)
 
-    def is_alive(self):
+    def is_alive(self) -> bool:
         alive = kernel32.WaitForSingleObject(self.handle, 0)
         if alive == winnt_constants.WAIT_TIMEOUT:
             return True
         else:
             return False
 
-    def kill(self, exit_code):
+    def kill(self, exit_code: int) -> bool:
         return kernel32.TerminateProcess(self.handle, exit_code)
 
-    def is_32bit(self):
+    def is_32bit(self) -> bool:
         """
         Checks whether target process is running under 32bit mode or 64bit mode
         To elaborate, it checks whether its running under Wow64.
@@ -123,7 +77,7 @@ class Process(object):
         """
         return kernel32.IsWow64Process(self.handle)
 
-    def read(self, address, n_bytes):
+    def read(self, address: int, n_bytes: int) -> bytearray:
         """
         Read specified bytes from the target process
 
@@ -136,11 +90,11 @@ class Process(object):
         """
         return kernel32.ReadProcessMemory(self.handle, address, n_bytes)
 
-    def read_memory(self, region):
+    def read_memory(self, region: kernel32.MEMORY_BASIC_INFORMATION) -> Union[bytes, bytearray]:
         base, size = region.get_memory_range()
         return self.read(base, size)
 
-    def read_string(self, address):
+    def read_string(self, address: int) -> str:
         """
         Read an ASCII string from target process
 
@@ -156,7 +110,7 @@ class Process(object):
             elif char == 0:
                 return string
 
-    def write(self, address, buffer):
+    def write(self, address: int, buffer: Union[bytes, bytearray]) -> bool:
         """
         Write a buffer to the target process at the specified address
 
@@ -167,10 +121,10 @@ class Process(object):
         """
         return kernel32.WriteProcessMemory(self.handle, address, buffer)
 
-    def protect(self, address, size, protection):
+    def protect(self, address: int, size: int, protection: int) -> bool:
         return kernel32.VirtualProtectEx(self.handle, address, size, protection)
 
-    def alloc_rwx(self, size):
+    def alloc_rwx(self, size: int) -> int:
         """
         Allocate memory to the target process
         Memory has read/write/execute permissions
@@ -180,7 +134,7 @@ class Process(object):
         """
         return kernel32.VirtualAllocEx(self.handle, 0, size)
 
-    def alloc_rw(self, size):
+    def alloc_rw(self, size: int) -> int:
         """
         Allocate memory to the target process
         Memory has read/write permissions
@@ -190,7 +144,7 @@ class Process(object):
         return kernel32.VirtualAllocEx(self.handle, 0, size,
                                        protect=winnt_constants.PAGE_READWRITE)
 
-    def free(self, address):
+    def free(self, address: int) -> bool:
         """
         Releases committed memory from the target process
 
@@ -198,7 +152,7 @@ class Process(object):
         """
         return kernel32.VirtualFreeEx(self.handle, address)
 
-    def get_threads(self):
+    def get_threads(self) -> list:
         """Enumerate all threads in process
         and returns a list"""
         threads = []
@@ -229,7 +183,7 @@ class Process(object):
         """
         return ntdll.NtResumeProcess(self.handle)
 
-    def yield_modules(self):
+    def yield_modules(self) -> iter:
         """
         Yields modules one by one using a generator object
         Each module is a MODULEENTRY32 structure object
@@ -244,7 +198,7 @@ class Process(object):
         while kernel32.Module32Next(h_snapshot, module_entry):
             yield module_entry
 
-    def get_module(self, module_name):
+    def get_module(self, module_name: str) -> kernel32.MODULEENTRY32:
         """Gets the MODULE_ENTRY_32 struct for
         a specific module in the process"""
         module_name = module_name.lower()
@@ -254,7 +208,7 @@ class Process(object):
             if curr_module_name.find(module_name) != -1:
                 return module_entry
 
-    def get_pe_info(self, module_name):
+    def get_pe_info(self, module_name: str) -> pefile.PE:
         """
         Returns a PE object (pefile module) for a module
         in the process
@@ -264,7 +218,7 @@ class Process(object):
         pe = pefile.PE(module.path)
         return pe
 
-    def get_pe_info_memory(self, module_name):
+    def get_pe_info_memory(self, module_name: str) -> pefile.PE:
         """
         Returns a PE object (pefile module) for a module
         in the process
@@ -274,7 +228,7 @@ class Process(object):
         data = self.read(module.base_address, module.size)
         return pefile.PE(data=data)
 
-    def get_exports(self, module_name):
+    def get_exports(self, module_name: str):
         """
         Get all exports for specified module name in the process
         """
@@ -282,12 +236,13 @@ class Process(object):
         module = self.get_module(module_name)
         pe = pefile.PE(module.path)
         pe.parse_data_directories()
-        for export in pe.DIRECTORY_ENTRY_EXPORT.symbols:
-            export_address = export.address + module.base_address
-            export_dict[export.name.decode("ASCII")] = export_address
-        return export_dict
+        if hasattr(pe, 'DIRECTORY_ENTRY_EXPORT'):
+            for export in pe.DIRECTORY_ENTRY_EXPORT.symbols:
+                export_address = export.address + module.base_address
+                export_dict[export.name.decode("ASCII")] = export_address
+            return export_dict
 
-    def get_imports(self, module_name):
+    def get_imports(self, module_name: str):
         """
         Get all imports for specified module name in the process
         """
@@ -295,14 +250,15 @@ class Process(object):
         module = self.get_module(module_name)
         pe = pefile.PE(module.path)
         pe.parse_data_directories()
-        for dll_entry in pe.DIRECTORY_ENTRY_IMPORT:
-            dll_import_list = {}
-            dll_name = dll_entry.dll.decode("ASCII")
-            base_address = self.get_module(dll_name).base_address
-            for import_entry in dll_entry.imports:
-                dll_import_list[import_entry.name] = import_entry.address + base_address
-            import_list.append((dll_name, dll_import_list))
-        return import_list
+        if hasattr(pe, 'DIRECTORY_ENTRY_IMPORT'):
+            for dll_entry in pe.DIRECTORY_ENTRY_IMPORT:
+                dll_import_list = {}
+                dll_name = dll_entry.dll.decode("ASCII")
+                base_address = self.get_module(dll_name).base_address
+                for import_entry in dll_entry.imports:
+                    dll_import_list[import_entry.name] = import_entry.address + base_address
+                import_list.append((dll_name, dll_import_list))
+            return import_list
 
     def yield_memory_regions(self, min_address=None, max_address=None, state=None, protect=None, m_type=None):
         """
@@ -365,7 +321,7 @@ class Process(object):
             mem_basic_info = kernel32.VirtualQueryEx(
                 self.handle, address)
 
-    def create_thread(self, address, parameter=0):
+    def create_thread(self, address, parameter=0) -> int:
         """
         Creates a thread in the target process at specified address, default parameter is NULL
         Parameter can be a pointer to some variable for the code that is executed to use.
@@ -375,8 +331,9 @@ class Process(object):
         """
         thread = kernel32.CreateRemoteThreadEx(self.handle, address, parameter)
         self.injected_threads.append(thread)
+        return thread
 
-    def created_threads_done(self):
+    def created_threads_done(self) -> bool:
         threads_done = True
         for thread in self.injected_threads:
             event = kernel32.WaitForSingleObject(thread, 0)
@@ -386,7 +343,11 @@ class Process(object):
                 self.injected_threads.remove(thread)
         return threads_done
 
-    def add_patch(self, patch_name, address, instructions):
+    def flush_instr_cache(self, address: int, size: int):
+        """Flushes the CPU instruction cache at specified location"""
+        return kernel32.FlushInstructionCache(self.handle, address, size)
+
+    def add_patch(self, patch_name: str, address: int, instructions: Union[bytes, bytearray]):
         """
         Adds a patch to the patches list, applies patch to the process
 
@@ -404,57 +365,58 @@ class Process(object):
         self.write(address, instructions)
         self.patches[patch_name] = (address, old_data)
 
-    def toggle_patch(self, patch_name):
+    def toggle_patch(self, patch_name: str):
         """
         Toggles a patch on or off
         This function swaps the bytes between the original code
         and the new code (instructions argument in Process.add_patch)
         """
-        address, old_data = self.patches[patch_name]
+        patch_address, old_data = self.patches[patch_name]
         patch_size = len(old_data)
-        patch_address = address
         patch_instructions = self.read(patch_address, patch_size)
+        old_protect = self.protect(patch_address, patch_size, winnt_constants.PAGE_EXECUTE_READWRITE)
         self.write(patch_address, old_data)
+        self.protect(patch_address, patch_size, old_protect)
+        self.flush_instr_cache(patch_address, patch_size)
         self.patches[patch_name] = (patch_address, patch_instructions)
 
     # plan to simplify the hook engine by stubbing out some of the repeated code and making
     # it into separate functions. e.g. get_instr_len(hook_address, max, read_size)
 
-    def detour_hook(self, target_address, hook_address):
+    def detour_hook(self, target_address: int, hook_address: int):
         if self.mode:
             instr_data = self.read(hook_address, 30)
             instr_length = self.dsm.get_instr_length(instr_data, hook_address, 5)
             nops = b'\x90' * (instr_length - 5)
-            old_protect = kernel32.VirtualProtectEx(
-                self.handle, hook_address, instr_length, winnt_constants.PAGE_EXECUTE_READWRITE)
+            old_protect = self.protect(hook_address, instr_length, winnt_constants.PAGE_EXECUTE_READWRITE)
             hook_relative = target_address - hook_address - 5
             hook_inject = b'\xE9' + struct.pack("i", hook_relative) + nops
             old_bytes = self.read(hook_address, instr_length)
+            self.suspend()
             self.write(hook_address, hook_inject)
-            kernel32.VirtualProtectEx(
-                self.handle, hook_address, instr_length, old_protect)
+            self.protect(hook_address, instr_length, old_protect)
+            self.resume()
             return old_bytes
         else:
             instr_data = self.read(hook_address, 30)
             instr_length = self.dsm.get_instr_length(instr_data, hook_address, 14)
             nops = b'\x90' * (instr_length - 14)
-            old_protect = kernel32.VirtualProtectEx(
-                self.handle, hook_address, instr_length, winnt_constants.PAGE_EXECUTE_READWRITE)
+            old_protect = self.protect(hook_address, instr_length, winnt_constants.PAGE_EXECUTE_READWRITE)
             hook_inject = b'\xFF\x25\x00\x00\x00\x00' + \
                           struct.pack("Q", target_address) + nops
             old_bytes = self.read(hook_address, instr_length)
+            self.suspend()
             self.write(hook_address, hook_inject)
-            kernel32.VirtualProtectEx(
-                self.handle, hook_address, instr_length, old_protect)
+            self.protect(hook_address, instr_length, old_protect)
+            self.resume()
             return old_bytes
 
-    def add_hook(self, hook_name, hook_address, assembly_code):
+    def add_hook(self, hook_name: str, hook_address: int, assembly_code: Union[str, bytes]):
         injected_code = b''
         if type(assembly_code) == str:
             injected_code = self.asm.assemble(assembly_code)
         elif type(assembly_code) == bytes or type(assembly_code) == bytearray:
             injected_code = assembly_code
-        self.suspend()
         target_address = self.alloc_rwx(len(injected_code))
         if self.mode:
             hook_relative = hook_address - (target_address + len(injected_code))
@@ -465,19 +427,31 @@ class Process(object):
         self.write(target_address, injected_code)
         old_bytes = self.detour_hook(
             target_address, hook_address)
-        self.resume()
-        self.hooks[hook_name] = (hook_address, old_bytes, target_address)
+        self.hooks[hook_name] = (hook_address, old_bytes, target_address, True)
 
-    def remove_hook(self, hook_name):
-        """Disable a hook and remove it from the list"""
-        hook_address, old_bytes, target_address = self.hooks[hook_name]
+    def toggle_hook(self, hook_name: str):
+        """Toggles a hook on or off
+        Does not free the allocated memory"""
+        hook_address, old_bytes, target_address, enabled = self.hooks[hook_name]
+        hook_size = len(old_bytes)
+        hook_instructions = self.read(hook_address, hook_size)
         self.suspend()
+        old_protect = self.protect(hook_address, hook_size, winnt_constants.PAGE_EXECUTE_READWRITE)
         self.write(hook_address, old_bytes)
-        self.free(target_address)
+        self.protect(hook_address, hook_size, old_protect)
         self.resume()
+        self.hooks[hook_name] = (hook_address, hook_instructions, target_address, not enabled)
+
+    def remove_hook(self, hook_name: str):
+        """Disables a hook and removes it from the list
+        Frees the allocated memory"""
+        hook_address, old_bytes, target_address, enabled = self.hooks[hook_name]
+        if enabled:
+            self.toggle_hook(hook_name)
+        self.free(target_address)
         self.hooks.pop(hook_name)
 
-    def inject_dll(self, dll_path):
+    def inject_dll(self, dll_path: str):
         """
         Injects a dll into the process
         This function uses LoadLibraryA and CreateRemoteThreadEx
@@ -496,7 +470,7 @@ class ProcessWatcher(object):
         self.proc = None
         self.attached = False
 
-    def wait_for(self):
+    def wait_for(self) -> Process:
         """Wait for the process to start running"""
         proc = Process(self.process)
         while proc.failed:
@@ -505,7 +479,7 @@ class ProcessWatcher(object):
         self.attached = True
         return proc
 
-    def is_alive(self):
+    def is_alive(self) -> bool:
         """Check if process is still running"""
         return self.proc.is_alive()
 
@@ -520,7 +494,7 @@ class ProcessWatcher(object):
         """
         self.proc.resume()
 
-    def watch_address(self, address, size):
+    def watch_address(self, address: int, size: int) -> bool:
         """
         Sleeps the thread until memory region data changes
         Useful for unpacker writing maybe?
@@ -533,6 +507,7 @@ class ProcessWatcher(object):
             if curr_bytes != original_bytes:
                 changed = True
         return True
+
 
 # data types for the address/pointer classes
 c_boolean = '?'
@@ -562,7 +537,7 @@ _c_types_ = {
 }
 
 
-class Address:
+class Address(object):
     def __init__(self, process: Process, address: int, c_type: str):
         if not process.failed and process.is_alive():
             self.handle = process.handle
@@ -600,7 +575,7 @@ class Pointer(Address):
             self.offsets = offsets
             self.resolve()
 
-    def resolve(self):
+    def resolve(self) -> bool:
         """
         Updates the local pointer to the address of the remote memory
         """
@@ -613,3 +588,51 @@ class Pointer(Address):
             address += offset
         self.address = address
         return True
+
+
+def start(app_name: str, command_line: str) -> Process:
+    """Start a process"""
+    process_id = kernel32.CreateProcess(app_name, command_line, 0)
+    return Process(process_id)
+
+
+def start_suspended(app_name: str, command_line: str) -> Process:
+    """Start a process in suspended state"""
+    process_id = kernel32.CreateProcess(app_name, command_line, winnt_constants.CREATE_SUSPENDED)
+    return Process(process_id)
+
+
+def yield_processes() -> iter:
+    """Get all running processes via snapshot, returns generator object"""
+    h_snapshot = kernel32.CreateToolhelp32Snapshot(
+        winnt_constants.TH32CS_SNAPPROCESS, 0)
+    proc_entry = kernel32.Process32First(h_snapshot)
+    yield proc_entry
+    while kernel32.Process32Next(h_snapshot, proc_entry):
+        yield proc_entry
+
+
+def get_process_first(process_name: str) -> kernel32.PROCESSENTRY32:
+    """Returns the first process in the list that matches with the input string"""
+    for process in yield_processes():
+        curr_process_name = process.name.lower()
+        if curr_process_name.find(process_name.lower()) != -1:
+            return process
+
+
+def get_processes(process_name: str) -> list:
+    """returns a list of running processes that match the input string"""
+    process_list = []
+    for process in yield_processes():
+        curr_process_name = process.name.lower()
+        if curr_process_name.find(process_name.lower()) != -1:
+            process_list.append(process)
+    return process_list
+
+
+def enable_se_debug():
+    """Enable debug privileges - warning! malicious scripts can abuse this
+    SE_DEBUG_PRIVILEGE allows this process to get handles to any process under any user
+    can only change the token when running under administrative rights"""
+    ntdll.AdjustPrivilege(
+        ntdll.SE_DEBUG_PRIVILEGE, True)

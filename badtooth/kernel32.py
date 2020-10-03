@@ -519,8 +519,8 @@ def ContinueDebugEvent(process_id, thread_id, continue_status):
     return success
 
 
-def FlushInstructionCache(process_handle):
-    success = __FlushInstructionCache(process_handle, 0, 0)
+def FlushInstructionCache(process_handle, address, size):
+    success = __FlushInstructionCache(process_handle, address, size)
     if not success:
         report_last_error()
     return success
