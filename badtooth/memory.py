@@ -446,6 +446,7 @@ class Process(object):
             old_bytes = self.read(hook_address, instr_length)
             self.suspend()
             self.write(hook_address, hook_inject)
+            self.flush_instr_cache(hook_address, instr_length)
             self.protect(hook_address, instr_length, old_protect)
             self.resume()
             return old_bytes
@@ -459,6 +460,7 @@ class Process(object):
             old_bytes = self.read(hook_address, instr_length)
             self.suspend()
             self.write(hook_address, hook_inject)
+            self.flush_instr_cache(hook_address, instr_length)
             self.protect(hook_address, instr_length, old_protect)
             self.resume()
             return old_bytes
@@ -496,6 +498,7 @@ class Process(object):
         self.suspend()
         old_protect = self.protect(hook_address, hook_size, winnt_constants.PAGE_EXECUTE_READWRITE)
         self.write(hook_address, old_bytes)
+        self.flush_instr_cache(hook_address, hook_size)
         self.protect(hook_address, hook_size, old_protect)
         self.resume()
         self.hooks[hook_name] = (hook_address, hook_instructions, target_address, not enabled)
