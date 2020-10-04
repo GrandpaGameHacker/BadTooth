@@ -1,11 +1,12 @@
 from . import kernel32
 from . import ntdll
 from . import winnt_constants
+from . import winerror_constants
 from .x86 import Dsm, Asm
 import pefile
 import struct
 import time
-from typing import Union
+from typing import Union, Generator, Any
 from enum import Enum
 
 # by default load the entire PE file
@@ -25,7 +26,6 @@ class CType(Enum):
     u_long = 'L'
     u_int = 'I'
     u_longlong = 'Q'
-
 
 
 _c_type_sz_ = {
@@ -66,6 +66,10 @@ class Process(object):
         if type(process) == int:
             self.process_id = process
             self.handle = kernel32.OpenProcess(self.process_id)
+            if self.handle != winerror_constants.ERROR_INVALID_HANDLE:
+                self.failed = False
+            else:
+                self.failed = True
         if type(process) == str:
             proc = get_process_first(process)
             if proc is not None:
@@ -74,7 +78,6 @@ class Process(object):
                 self.failed = False
             else:
                 self.failed = True
-                return
         self.mode = self.is_32bit()
         self.patches = {}
         self.hooks = {}
@@ -303,14 +306,13 @@ class Process(object):
                 import_list.append((dll_name, dll_import_list))
             return import_list
 
-    def yield_memory_regions(self, min_address=None, max_address=None, state=None, protect=None, m_type=None):
+    def yield_memory_regions(self, min_address: int = None, max_address: int = None, state: int = None,
+                             protect: int = None, m_type: int = None) -> \
+            Generator[kernel32.MEMORY_BASIC_INFORMATION, Any, None]:
         """
         Yields memory regions one by one using a generator object
         Each region is a MEMORY_BASIC_INFORMATION structure object
         Regions belong to the target process
-
-        Process.yield_regions(min_address = None, max_address = None, state=None, protect=None, m_type = None) ->
-        Generator(kernel32.MEMORY_BASIC_INFORMATION)]
 
         Each overload (min_address, max_address, state, protect, m_type) allows you to filter for certain
         types of memory, you can have any combination of the five filters.
@@ -579,6 +581,7 @@ class Address(object):
      |
      |
     """
+
     def __init__(self, process: Process, address: int, c_type):
         if not process.failed and process.is_alive():
             self.handle = process.handle
@@ -591,6 +594,17 @@ class Address(object):
         Read a value from this address
         """
         data = kernel32.ReadProcessMemory(self.handle, self.address, self.size)
+        if data is None:
+            return None
+        if len(data) == self.size:
+            return self.converter.unpack(data)[0]
+        return None
+
+    def read_offset(self, offset: int):
+        """
+        Read a value from this address + offset
+        """
+        data = kernel32.ReadProcessMemory(self.handle, self.address+offset, self.size)
         if data is None:
             return None
         if len(data) == self.size:
@@ -612,6 +626,7 @@ class Pointer(Address):
      |
      |
     """
+
     def __init__(self, process: Process, base_address: int, offsets: list, c_type):
         if not process.failed and process.is_alive():
             super(Pointer, self).__init__(process, 0, c_type)
@@ -670,10 +685,14 @@ def get_process_first(process_name: str) -> kernel32.PROCESSENTRY32:
 def get_processes(process_name: str) -> list:
     """returns a list of running processes that match the input string"""
     process_list = []
-    for process in yield_processes():
-        curr_process_name = process.name.lower()
-        if curr_process_name.find(process_name.lower()) != -1:
-            process_list.append(process)
+    process_name = process_name.lower()
+    h_snapshot = kernel32.CreateToolhelp32Snapshot(
+        winnt_constants.TH32CS_SNAPPROCESS, 0)
+    proc_entry = kernel32.Process32First(h_snapshot)
+    while kernel32.Process32Next(h_snapshot, proc_entry):
+        name = proc_entry.name.lower()
+        if name.find(process_name) != -1:
+            process_list.append((name, proc_entry.pid))
     return process_list
 
 
