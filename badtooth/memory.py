@@ -377,6 +377,11 @@ class Process(object):
         return thread
 
     def created_threads_done(self) -> bool:
+        """
+        Checks if all injected threads have finished executing.
+        Removes completed threads from the list
+        Returns true if all injected threads have finished executing.
+        """
         threads_done = True
         for thread in self.injected_threads:
             event = kernel32.WaitForSingleObject(thread, 0)
@@ -427,6 +432,10 @@ class Process(object):
     # it into separate functions. e.g. get_instr_len(hook_address, max, read_size)
 
     def detour_hook(self, target_address: int, hook_address: int):
+        """
+        Used internally, injects a jump into the hook_address code that
+        jumps into target_address
+        """
         if self.mode:
             instr_data = self.read(hook_address, 30)
             instr_length = self.dsm.get_instr_length(instr_data, hook_address, 5)
@@ -455,6 +464,10 @@ class Process(object):
             return old_bytes
 
     def add_hook(self, hook_name: str, hook_address: int, assembly_code: Union[str, bytes]):
+        """
+        Adds a hook to the process, which is registered to the list with hook_name
+        assembly_code can be raw bytes or a string of instructions separated with ';'
+        """
         injected_code = b''
         if type(assembly_code) == str:
             injected_code = self.asm.assemble(assembly_code)
@@ -473,8 +486,10 @@ class Process(object):
         self.hooks[hook_name] = (hook_address, old_bytes, target_address, True)
 
     def toggle_hook(self, hook_name: str):
-        """Toggles a hook on or off
-        Does not free the allocated memory"""
+        """
+        Toggles a hook on or off
+        Does not free the allocated memory for the injected code
+        """
         hook_address, old_bytes, target_address, enabled = self.hooks[hook_name]
         hook_size = len(old_bytes)
         hook_instructions = self.read(hook_address, hook_size)
@@ -486,8 +501,10 @@ class Process(object):
         self.hooks[hook_name] = (hook_address, hook_instructions, target_address, not enabled)
 
     def remove_hook(self, hook_name: str):
-        """Disables a hook and removes it from the list
-        Frees the allocated memory"""
+        """
+        Disables a hook and removes it from the list
+        Frees the allocated memory for the injected code
+        """
         hook_address, old_bytes, target_address, enabled = self.hooks[hook_name]
         if enabled:
             self.toggle_hook(hook_name)
@@ -498,7 +515,7 @@ class Process(object):
         """
         Injects a dll into the process
         This function uses LoadLibraryA and CreateRemoteThreadEx
-        which is very loud. Will not work against anti-cheats
+        which is very loud. Will not work against most anti-cheats
         """
         kernel32_handle = kernel32.GetModuleHandle("kernel32.dll")
         load_lib = kernel32.GetProcAddress(kernel32_handle, "LoadLibraryA")
@@ -553,6 +570,12 @@ class ProcessWatcher(object):
 
 
 class Address(object):
+    """
+    class Address(object)
+     | Address(process, address, c_type) -> Address
+     |
+     |
+    """
     def __init__(self, process: Process, address: int, c_type):
         if not process.failed and process.is_alive():
             self.handle = process.handle
@@ -580,6 +603,12 @@ class Address(object):
 
 
 class Pointer(Address):
+    """
+    class Pointer(Address)
+     | Pointer(process, base_address, offsets, c_type) -> Address
+     |
+     |
+    """
     def __init__(self, process: Process, base_address: int, offsets: list, c_type):
         if not process.failed and process.is_alive():
             super(Pointer, self).__init__(process, 0, c_type)
