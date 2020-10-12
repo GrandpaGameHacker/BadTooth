@@ -124,6 +124,13 @@ class Process(object):
             elif char == 0:
                 return string
 
+    def read_structure(self, address: int, structure: ctypes.Structure):
+        data = bytes(kernel32.ReadProcessMemory(self.handle, address, ctypes.sizeof(structure)))
+        data = ctypes.c_buffer(data)
+        fit = min(len(data), ctypes.sizeof(structure))
+        ctypes.memmove(ctypes.addressof(structure), data, fit)
+        return structure
+
     def write(self, address: int, buffer: Union[bytes, bytearray]) -> bool:
         """
         Write a buffer to the target process at the specified address
@@ -134,6 +141,10 @@ class Process(object):
         buffer is the bytes you want to write to the process
         """
         return kernel32.WriteProcessMemory(self.handle, address, buffer)
+
+    def write_structure(self, address: int, structure: ctypes.Structure):
+        data = bytes(structure)
+        kernel32.WriteProcessMemory(self.handle, address, data)
 
     def protect(self, address: int, size: int, protection: int) -> bool:
         return kernel32.VirtualProtectEx(self.handle, address, size, protection)
@@ -413,10 +424,10 @@ class Process(object):
         if self.mode:
             instr_data = self.read(hook_address, 30)
             instr_length = self.dsm.get_instr_length(instr_data, hook_address, 5)
-            nops = b'\x90' * (instr_length - 5)
+            nop_instr = b'\x90' * (instr_length - 5)
             old_protect = self.protect(hook_address, instr_length, winnt_constants.PAGE_EXECUTE_READWRITE)
             hook_relative = target_address - hook_address - 5
-            hook_inject = b'\xE9' + struct.pack("i", hook_relative) + nops
+            hook_inject = b'\xE9' + struct.pack("i", hook_relative) + nop_instr
             old_bytes = self.read(hook_address, instr_length)
             self.suspend()
             self.write(hook_address, hook_inject)
@@ -427,10 +438,10 @@ class Process(object):
         else:
             instr_data = self.read(hook_address, 30)
             instr_length = self.dsm.get_instr_length(instr_data, hook_address, 14)
-            nops = b'\x90' * (instr_length - 14)
+            nop_instr = b'\x90' * (instr_length - 14)
             old_protect = self.protect(hook_address, instr_length, winnt_constants.PAGE_EXECUTE_READWRITE)
             hook_inject = b'\xFF\x25\x00\x00\x00\x00' + \
-                          struct.pack("Q", target_address) + nops
+                          struct.pack("Q", target_address) + nop_instr
             old_bytes = self.read(hook_address, instr_length)
             self.suspend()
             self.write(hook_address, hook_inject)
@@ -569,6 +580,7 @@ class Address(object):
         if data is None:
             return None
         if len(data) == self.size:
+            data = ctypes.c_buffer(data)
             return ctypes.cast(data, ctypes.POINTER(self.c_type))[0]
         return None
 
@@ -576,7 +588,7 @@ class Address(object):
         """
         Read a value from this address + offset
         """
-        data = kernel32.ReadProcessMemory(self.handle, self.address+offset, self.size)
+        data = kernel32.ReadProcessMemory(self.handle, self.address + offset, self.size)
         if data is None:
             return None
         if len(data) == self.size:
@@ -618,6 +630,7 @@ class Pointer(Address):
             data = bytes(kernel32.ReadProcessMemory(self.handle, address, self.pointer_size))
             if data is None:
                 return False
+            data = ctypes.c_buffer(data)
             address = ctypes.cast(data, self.c_pointer)[0]
             address += offset
         self.address = address
