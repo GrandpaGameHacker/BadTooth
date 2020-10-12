@@ -5,42 +5,12 @@ from . import winerror_constants
 from .x86 import Dsm, Asm
 import pefile
 import struct
+import ctypes
 import time
 from typing import Union, Generator, Any
-from enum import Enum
 
 # by default load the entire PE file
 pefile.fast_load = False
-
-
-# data types for the address/pointer classes
-class CType(Enum):
-    boolean = '?'
-    short = 'h'
-    long = 'l'
-    int = 'i'
-    longlong = 'q'
-    float = 'f'
-    double = 'd'
-    u_short = 'H'
-    u_long = 'L'
-    u_int = 'I'
-    u_longlong = 'Q'
-
-
-_c_type_sz_ = {
-    CType.boolean: 1,
-    CType.short: 2,
-    CType.long: 4,
-    CType.int: 4,
-    CType.longlong: 8,
-    CType.float: 4,
-    CType.double: 8,
-    CType.u_short: 2,
-    CType.u_long: 4,
-    CType.u_int: 4,
-    CType.u_longlong: 8,
-}
 
 
 class Process(object):
@@ -136,7 +106,7 @@ class Process(object):
         base, size = region.get_memory_range()
         return self.read(base, size)
 
-    def read_string(self, address: int) -> str:
+    def read_string(self, address: int, max_length=0) -> str:
         """
         Read an ASCII string from target process
 
@@ -145,6 +115,8 @@ class Process(object):
         string = ""
         i = 0
         while True:
+            if max_length and max_length == i:
+                return string
             char = self.read(address + i, 1)[0]
             if 0x20 <= char < 0x7f:
                 string = string + chr(char)
@@ -586,18 +558,18 @@ class Address(object):
         if not process.failed and process.is_alive():
             self.handle = process.handle
             self.address = address
-            self.size = _c_type_sz_[c_type]
-            self.converter = struct.Struct(c_type.value)
+            self.size = ctypes.sizeof(c_type)
+            self.c_type = c_type
 
     def read(self):
         """
         Read a value from this address
         """
-        data = kernel32.ReadProcessMemory(self.handle, self.address, self.size)
+        data = bytes(kernel32.ReadProcessMemory(self.handle, self.address, self.size))
         if data is None:
             return None
         if len(data) == self.size:
-            return self.converter.unpack(data)[0]
+            return ctypes.cast(data, ctypes.POINTER(self.c_type))[0]
         return None
 
     def read_offset(self, offset: int):
@@ -608,14 +580,14 @@ class Address(object):
         if data is None:
             return None
         if len(data) == self.size:
-            return self.converter.unpack(data)[0]
+            return ctypes.cast(data, ctypes.POINTER(self.c_type))[0]
         return None
 
     def write(self, value):
         """
         Write a value to this address
         """
-        data = self.converter.pack(value)
+        data = bytes(self.c_type(value))
         return kernel32.WriteProcessMemory(self.handle, self.address, data)
 
 
@@ -631,7 +603,7 @@ class Pointer(Address):
         if not process.failed and process.is_alive():
             super(Pointer, self).__init__(process, 0, c_type)
             self.pointer_size = 4 if process.mode else 8
-            self.c_pointer = struct.Struct("I") if process.mode else struct.Struct("Q")
+            self.c_pointer = ctypes.POINTER(ctypes.c_uint32) if process.mode else ctypes.POINTER(ctypes.c_uint64)
             self.base_address = base_address
             self.address = 0
             self.offsets = offsets
@@ -643,10 +615,10 @@ class Pointer(Address):
         """
         address = self.base_address
         for offset in self.offsets:
-            data = kernel32.ReadProcessMemory(self.handle, address, self.pointer_size)
+            data = bytes(kernel32.ReadProcessMemory(self.handle, address, self.pointer_size))
             if data is None:
                 return False
-            address = self.c_pointer.unpack(data)[0]
+            address = ctypes.cast(data, self.c_pointer)[0]
             address += offset
         self.address = address
         return True
