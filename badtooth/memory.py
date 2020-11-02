@@ -125,11 +125,13 @@ class Process(object):
                 return string
 
     def read_structure(self, address: int, structure: ctypes.Structure):
+        """
+        Read a structure from process into a local ctypes instance
+        """
         data = bytes(kernel32.ReadProcessMemory(self.handle, address, ctypes.sizeof(structure)))
         data = ctypes.c_buffer(data)
         fit = min(len(data), ctypes.sizeof(structure))
         ctypes.memmove(ctypes.addressof(structure), data, fit)
-        return structure
 
     def write(self, address: int, buffer: Union[bytes, bytearray]) -> bool:
         """
@@ -142,11 +144,17 @@ class Process(object):
         """
         return kernel32.WriteProcessMemory(self.handle, address, buffer)
 
-    def write_structure(self, address: int, structure: ctypes.Structure):
+    def write_structure(self, address: int, structure):
+        """
+        Writes a local ctypes structure instance to process memory
+        """
         data = bytes(structure)
         kernel32.WriteProcessMemory(self.handle, address, data)
 
     def protect(self, address: int, size: int, protection: int) -> bool:
+        """
+        Sets the memory protection of page(s)
+        """
         return kernel32.VirtualProtectEx(self.handle, address, size, protection)
 
     def alloc_rwx(self, size: int) -> int:
@@ -268,7 +276,10 @@ class Process(object):
         if hasattr(pe, 'DIRECTORY_ENTRY_EXPORT'):
             for export in pe.DIRECTORY_ENTRY_EXPORT.symbols:
                 export_address = export.address + module.base_address
-                export_dict[export.name.decode("ASCII")] = export_address
+                if export.name:
+                    export_dict[export.name.decode("ASCII")] = export_address
+                else:
+                    export_dict[export.ordinal] = export_address
             return export_dict
 
     def get_imports(self, module_name: str):
@@ -581,7 +592,7 @@ class Address(object):
             return None
         if len(data) == self.size:
             data = ctypes.c_buffer(data)
-            return ctypes.cast(data, ctypes.POINTER(self.c_type))[0]
+            return ctypes.cast(data, ctypes.POINTER(self.c_type)).contents
         return None
 
     def read_offset(self, offset: int):
@@ -592,12 +603,13 @@ class Address(object):
         if data is None:
             return None
         if len(data) == self.size:
-            return ctypes.cast(data, ctypes.POINTER(self.c_type))[0]
+            return ctypes.cast(data, ctypes.POINTER(self.c_type)).contents
         return None
 
-    def write(self, value):
+    def write(self, value: Union[int, float, tuple]):
         """
         Write a value to this address
+        In the case of an array use a tuple of that array (1,2,3)...
         """
         data = bytes(self.c_type(value))
         return kernel32.WriteProcessMemory(self.handle, self.address, data)
