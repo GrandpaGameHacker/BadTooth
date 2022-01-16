@@ -123,6 +123,8 @@ class Process(object):
                 i = i + 1
             elif char == 0:
                 return string
+            else:
+                return ""
 
     def read_structure(self, address: int, structure: ctypes.Structure):
         """
