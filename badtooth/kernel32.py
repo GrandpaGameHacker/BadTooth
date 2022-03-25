@@ -49,6 +49,11 @@ __ResumeThread = kernel32.ResumeThread
 __ResumeThread.argtypes = [HANDLE]
 __ResumeThread.restype = DWORD
 
+# GetExitCodeThread(hThread, lpExitCode );
+__GetExitCodeThread = kernel32.GetExitCodeThread
+__GetExitCodeThread.argtypes = [HANDLE, LPDWORD]
+__GetExitCodeThread.restype = BOOL
+
 # CloseHandle(hObject );
 __CloseHandle = kernel32.CloseHandle
 __CloseHandle.argtypes = [HANDLE]
@@ -213,7 +218,8 @@ __FlushInstructionCache.restype = BOOL
 # CreateNamedPipeA(lpName, dwOpenMode, dwPipeMode, nMaxInstances, nOutBufferSize, nInBufferSize, nDefaultTimeOut,
 # lpSecurityAttributes );
 __CreateNamedPipeA = kernel32.CreateNamedPipeA
-__CreateNamedPipeA.argtypes = [LPCSTR, DWORD, DWORD, DWORD, DWORD, DWORD, DWORD, POINTER(SECURITY_ATTRIBUTES)]
+__CreateNamedPipeA.argtypes = [
+    LPCSTR, DWORD, DWORD, DWORD, DWORD, DWORD, DWORD, POINTER(SECURITY_ATTRIBUTES)]
 __CreateNamedPipeA.restype = HANDLE
 
 # PeekNamedPipe(hNamedPipe, lpBuffer, nBufferSize, lpBytesRead, lpTotalBytesAvail, lpBytesLeftThisMessage );
@@ -413,6 +419,13 @@ def CreateRemoteThreadEx(process_handle, start_address,
         report_last_error()
     else:
         return handle
+
+def GetExitCodeThread(hThread):
+    exit_code = DWORD(0)
+    if __GetExitCodeThread(hThread, byref(exit_code)):
+        return exit_code
+    else:
+        report_last_error()
 
 
 def IsWow64Process(handle):

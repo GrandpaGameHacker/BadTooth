@@ -12,6 +12,7 @@ from typing import Union, Generator, Any
 # by default load the entire PE file
 pefile.fast_load = False
 
+global_use_suspend_process = True
 
 class Process(object):
     """
@@ -51,6 +52,7 @@ class Process(object):
         self.mode = self.is_32bit()
         self.patches = {}
         self.hooks = {}
+        self.vt_hooks = {}
         self.injected_threads = []
         self.asm = Asm(self.mode)
         self.dsm = Dsm(self.mode)
@@ -181,9 +183,8 @@ class Process(object):
 
     def free(self, address: int) -> bool:
         """
+        @param
         Releases committed memory from the target process
-
-        Process.free(address) -> success: bool
         """
         return kernel32.VirtualFreeEx(self.handle, address)
 
@@ -236,7 +237,9 @@ class Process(object):
             yield module_entry
 
     def get_module(self, module_name: str) -> kernel32.MODULEENTRY32:
-        """Gets the MODULE_ENTRY_32 struct for
+        """
+        @param module_name: the name of the module to get info on
+        Gets the MODULE_ENTRY_32 struct for
         a specific module in the process
         Only works if process is the same bits (32/64) as python instance!
         """
@@ -249,6 +252,7 @@ class Process(object):
 
     def get_pe_info(self, module_name: str) -> pefile.PE:
         """
+        @param module_name: the name of the module to get pe info from
         Returns a PE object (pefile module) for a module
         in the process
         Grabs the data from file
@@ -259,6 +263,7 @@ class Process(object):
 
     def get_pe_info_memory(self, module_name: str) -> pefile.PE:
         """
+        @param module_name: the name of the module to get pe info from
         Returns a PE object (pefile module) for a module
         in the process
         Grabs the data from memory
@@ -269,6 +274,7 @@ class Process(object):
 
     def get_exports(self, module_name: str):
         """
+        @param module_name: the name of the module to get exports from
         Get all exports for specified module name in the process
         """
         export_dict = {}
@@ -286,6 +292,7 @@ class Process(object):
 
     def get_imports(self, module_name: str):
         """
+        @param module_name: the name of the module to get imports from
         Get all imports for specified module name in the process
         """
         import_list = []
@@ -364,11 +371,10 @@ class Process(object):
 
     def create_thread(self, address, parameter=0) -> int:
         """
+        @param address: address to start the new thread at
+        @param parameter: optional integer parameter for the new thread
         Creates a thread in the target process at specified address, default parameter is NULL
         Parameter can be a pointer to some variable for the code that is executed to use.
-
-        Process.create_thread(address) -> thread_handle: HANDLE
-        Process.create_thread(address, parameter=0) -> thread_handle: HANDLE
         """
         thread = kernel32.CreateRemoteThreadEx(self.handle, address, parameter)
         self.injected_threads.append(thread)
@@ -395,15 +401,13 @@ class Process(object):
 
     def add_patch(self, patch_name: str, address: int, instructions: Union[bytes, bytearray]):
         """
+        @param patch_name: name of the patch to create
+        @param address: address to patch
+        @param instructions: raw machine code bytes or a string of instructions separated with ';'
         Adds a patch to the patches list, applies patch to the process
-
-        Process.add_patch(patch_name, address, instructions)
 
         The patch is registered with a dictionary Process.patches
         using the supplied patch_name argument
-
-        The instructions argument is a bytearray of x86/64 assembly code
-        that is to be written to the specified address/location in the target code.
 
         Use Process.toggle_patch(patch_name) to enable or disable the patch
         """
@@ -413,6 +417,7 @@ class Process(object):
 
     def toggle_patch(self, patch_name: str):
         """
+        @param patch_name: name of the installed patch to toggle
         Toggles a patch on or off
         This function swaps the bytes between the original code
         and the new code (instructions argument in Process.add_patch)
@@ -442,11 +447,13 @@ class Process(object):
             hook_relative = target_address - hook_address - 5
             hook_inject = b'\xE9' + struct.pack("i", hook_relative) + nop_instr
             old_bytes = self.read(hook_address, instr_length)
-            self.suspend()
+            if global_use_suspend_process:
+                self.suspend()
             self.write(hook_address, hook_inject)
             self.flush_instr_cache(hook_address, instr_length)
             self.protect(hook_address, instr_length, old_protect)
-            self.resume()
+            if global_use_suspend_process:
+                self.resume()
             return old_bytes
         else:
             instr_data = self.read(hook_address, 30)
@@ -456,17 +463,21 @@ class Process(object):
             hook_inject = b'\xFF\x25\x00\x00\x00\x00' + \
                           struct.pack("Q", target_address) + nop_instr
             old_bytes = self.read(hook_address, instr_length)
-            self.suspend()
+            if global_use_suspend_process:
+                self.suspend()
             self.write(hook_address, hook_inject)
             self.flush_instr_cache(hook_address, instr_length)
             self.protect(hook_address, instr_length, old_protect)
-            self.resume()
+            if global_use_suspend_process:
+                self.resume()
             return old_bytes
 
     def add_hook(self, hook_name: str, hook_address: int, assembly_code: Union[str, bytes]):
         """
+        @param hook_name: name of the hook to be created
+        @param hook_address: address to install the hook on
+        @param assembly_code: raw machine code bytes or a string of instructions separated with ';'
         Adds a hook to the process, which is registered to the list with hook_name
-        assembly_code can be raw bytes or a string of instructions separated with ';'
         """
         injected_code = b''
         if type(assembly_code) == str:
@@ -485,24 +496,29 @@ class Process(object):
             target_address, hook_address)
         self.hooks[hook_name] = (hook_address, old_bytes, target_address, True)
 
+
     def toggle_hook(self, hook_name: str):
         """
+        @param hook_name: name of the installed hook to toggle
         Toggles a hook on or off
         Does not free the allocated memory for the injected code
         """
         hook_address, old_bytes, target_address, enabled = self.hooks[hook_name]
         hook_size = len(old_bytes)
         hook_instructions = self.read(hook_address, hook_size)
-        self.suspend()
+        if global_use_suspend_process:
+            self.suspend()
         old_protect = self.protect(hook_address, hook_size, winnt.PAGE_EXECUTE_READWRITE)
         self.write(hook_address, old_bytes)
         self.flush_instr_cache(hook_address, hook_size)
         self.protect(hook_address, hook_size, old_protect)
-        self.resume()
+        if global_use_suspend_process:
+            self.resume()
         self.hooks[hook_name] = (hook_address, hook_instructions, target_address, not enabled)
 
     def remove_hook(self, hook_name: str):
         """
+        @param hook_name: name of the installed hook to remove
         Disables a hook and removes it from the list
         Frees the allocated memory for the injected code
         """
@@ -511,6 +527,50 @@ class Process(object):
             self.toggle_hook(hook_name)
         self.free(target_address)
         self.hooks.pop(hook_name)
+
+    def add_vt_hook(self, hook_name: str, p_virtual_table: int, index: int, assembly_code: Union[str, bytes]):
+        """
+        Adds a virtual function table hook to the process
+        @param hook_name: name of the hook
+        @param p_virtual_table: pointer to the virtual function table
+        @param index: index into the table to hook (first func is 0, 2nd is 1...)
+        @param assembly_code: code or bytes to inject
+        """
+        injected_code = b''
+        if type(assembly_code) == str:
+            injected_code = self.asm.assemble(assembly_code)
+        elif type(assembly_code) == bytes or type(assembly_code) == bytearray:
+            injected_code = assembly_code
+        target_address = self.alloc_rwx(len(injected_code))
+        self.write(target_address, injected_code)
+        if self.mode:
+            ct = ctypes.c_uint32
+        else:
+            ct = ctypes.c_uint64
+        fptr = self.address(p_virtual_table + (index*ctypes.sizeof(ct)), ct)
+        old_protect = self.protect(p_virtual_table, 512, winnt.PAGE_READWRITE)
+        original_function = fptr.read()
+        fptr.write(target_address)
+        self.protect(p_virtual_table, 512, old_protect)
+        self.vt_hooks[hook_name] = (fptr, original_function, target_address, True)
+
+    def toggle_vt_hook(self, hook_name):
+        fptr, original_function, target_address, enabled = self.vt_hooks[hook_name]
+        old_protect = self.protect(fptr.address, 512, winnt.PAGE_READWRITE)
+        if enabled:
+            fptr.write(original_function.value)
+        else:
+            fptr.write(target_address)
+        self.protect(fptr.address, 512, old_protect)
+        self.vt_hooks[hook_name] = (fptr, original_function, target_address, not enabled)
+
+    def remove_vt_hook(self, hook_name):
+        fptr, original_function, target_address, enabled = self.vt_hooks[hook_name]
+        old_protect = self.protect(fptr.address, 512, winnt.PAGE_READWRITE)
+        fptr.write(original_function.value)
+        self.protect(fptr.address, 512, old_protect)
+        self.free(target_address)
+        self.vt_hooks.pop(hook_name)
 
     def inject_dll(self, dll_path: str):
         """

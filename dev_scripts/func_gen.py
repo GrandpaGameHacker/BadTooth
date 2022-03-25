@@ -2,13 +2,9 @@
 dll_name = "kernel32"
 
 function_to_convert = """
-BOOL PeekNamedPipe(
-  HANDLE  hNamedPipe,
-  LPVOID  lpBuffer,
-  DWORD   nBufferSize,
-  LPDWORD lpBytesRead,
-  LPDWORD lpTotalBytesAvail,
-  LPDWORD lpBytesLeftThisMessage
+BOOL GetExitCodeThread(
+  HANDLE  hThread,
+  LPDWORD lpExitCode
 );
 """
 
