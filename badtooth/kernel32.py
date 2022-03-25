@@ -1,7 +1,7 @@
 from ctypes import *
 from ctypes.wintypes import *
-from .winnt_constants import *
-from . import winerror_constants
+from . import winnt
+from . import winerror
 from . kernel32_structs import *
 kernel32 = WinDLL("kernel32", use_last_error=True)
 
@@ -233,7 +233,7 @@ def GetSystemInfo():
 def GetModuleHandle(module):
     c_data = c_char_p(bytes(module, "ASCII"))
     handle = __GetModuleHandle(c_data)
-    if handle == winerror_constants.ERROR_INVALID_HANDLE:
+    if handle == winerror.ERROR_INVALID_HANDLE:
         report_last_error()
     else:
         return handle
@@ -250,7 +250,7 @@ def GetProcAddress(module_handle, proc_name):
 
 def CreateToolhelp32Snapshot(flags, process_id):
     handle = __CreateToolhelp32Snapshot(flags, process_id)
-    if handle == winerror_constants.ERROR_INVALID_HANDLE:
+    if handle == winerror.ERROR_INVALID_HANDLE:
         report_last_error()
     else:
         return handle
@@ -303,7 +303,7 @@ def Module32Next(h_snapshot, module_entry):
 
 def OpenProcess(pid, b_inherit_handle=False):
     process_handle = __OpenProcess(
-        PROCESS_ALL_ACCESS, b_inherit_handle, pid)
+        winnt.PROCESS_ALL_ACCESS, b_inherit_handle, pid)
 
     if process_handle == 0:
         report_last_error()
@@ -312,7 +312,7 @@ def OpenProcess(pid, b_inherit_handle=False):
 
 def OpenThread(tid, b_inherit_handle=False):
     thread_handle = __OpenThread(
-        THREAD_ALL_ACCESS, b_inherit_handle, tid)
+        winnt.THREAD_ALL_ACCESS, b_inherit_handle, tid)
     if thread_handle == 0:
         report_last_error()
     return thread_handle
@@ -385,8 +385,8 @@ def VirtualProtectEx(process_handle, address, size, new_protect):
 
 
 def VirtualAllocEx(process_handle, address, size,
-                   allocation_type=MEM_COMMIT,
-                   protect=PAGE_EXECUTE_READWRITE):
+                   allocation_type=winnt.MEM_COMMIT,
+                   protect=winnt.PAGE_EXECUTE_READWRITE):
     new_memory = __VirtualAllocEx(
         process_handle, address, size, allocation_type, protect)
     if not new_memory:
@@ -396,7 +396,7 @@ def VirtualAllocEx(process_handle, address, size,
 
 
 def VirtualFreeEx(process_handle, address,
-                  size=0, free_type=MEM_RELEASE):
+                  size=0, free_type=winnt.MEM_RELEASE):
     success = __VirtualFreeEx(process_handle, address, size, free_type)
     if not success:
         report_last_error()
@@ -409,7 +409,7 @@ def CreateRemoteThreadEx(process_handle, start_address,
                                     0, 0, start_address,
                                     c_void_p(parameter),
                                     creation_flags, 0, DWORD(0))
-    if handle == winerror_constants.ERROR_INVALID_HANDLE:
+    if handle == winerror.ERROR_INVALID_HANDLE:
         report_last_error()
     else:
         return handle
@@ -426,7 +426,7 @@ def IsWow64Process(handle):
 
 def WaitForSingleObject(object_handle, milliseconds):
     result = __WaitForSingleObject(object_handle, milliseconds)
-    if result == WAIT_FAILED:
+    if result == winnt.WAIT_FAILED:
         report_last_error()
     return result
 
@@ -462,7 +462,7 @@ def TerminateProcess(process_handle, exit_code):
 def GetThreadContext(is_32bit, thread_handle):
     if is_32bit:
         thread_context = CONTEXT32()
-        thread_context.ContextFlags = CONTEXT_FULL | CONTEXT_DEBUG_REGISTERS
+        thread_context.ContextFlags = winnt.CONTEXT_FULL | winnt.CONTEXT_DEBUG_REGISTERS
         result = __Wow64GetThreadContext(thread_handle, byref(thread_context))
     else:
         thread_context = CONTEXT64()

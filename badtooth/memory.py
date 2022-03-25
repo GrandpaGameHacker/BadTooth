@@ -1,7 +1,7 @@
 from . import kernel32
 from . import ntdll
-from . import winnt_constants
-from . import winerror_constants
+from . import winnt
+from . import winerror
 from .x86 import Dsm, Asm
 import pefile
 import struct
@@ -36,7 +36,7 @@ class Process(object):
         if type(process) == int:
             self.process_id = process
             self.handle = kernel32.OpenProcess(self.process_id)
-            if self.handle != winerror_constants.ERROR_INVALID_HANDLE:
+            if self.handle != winerror.ERROR_INVALID_HANDLE:
                 self.failed = False
             else:
                 self.failed = True
@@ -64,7 +64,7 @@ class Process(object):
 
     def is_alive(self) -> bool:
         alive = kernel32.WaitForSingleObject(self.handle, 0)
-        if alive == winnt_constants.WAIT_TIMEOUT:
+        if alive == winnt.WAIT_TIMEOUT:
             return True
         else:
             return False
@@ -177,7 +177,7 @@ class Process(object):
         Process.alloc_rwx(size) -> address: int
         """
         return kernel32.VirtualAllocEx(self.handle, 0, size,
-                                       protect=winnt_constants.PAGE_READWRITE)
+                                       protect=winnt.PAGE_READWRITE)
 
     def free(self, address: int) -> bool:
         """
@@ -192,7 +192,7 @@ class Process(object):
         and returns a list"""
         threads = []
         h_snapshot = kernel32.CreateToolhelp32Snapshot(
-            winnt_constants.TH32CS_SNAPTHREAD, 0)
+            winnt.TH32CS_SNAPTHREAD, 0)
         thread_entry = kernel32.Thread32First(h_snapshot)
         if thread_entry.owner_pid == self.process_id:
             threads.append(thread_entry)
@@ -229,7 +229,7 @@ class Process(object):
         Only works if process is the same bits (32/64) as python instance!
         """
         h_snapshot = kernel32.CreateToolhelp32Snapshot(
-            winnt_constants.TH32CS_SNAPMODULE, self.process_id)
+            winnt.TH32CS_SNAPMODULE, self.process_id)
         module_entry = kernel32.Module32First(h_snapshot)
         yield module_entry
         while kernel32.Module32Next(h_snapshot, module_entry):
@@ -383,7 +383,7 @@ class Process(object):
         threads_done = True
         for thread in self.injected_threads:
             event = kernel32.WaitForSingleObject(thread, 0)
-            if event == winnt_constants.WAIT_TIMEOUT:
+            if event == winnt.WAIT_TIMEOUT:
                 threads_done = False
             else:
                 self.injected_threads.remove(thread)
@@ -420,7 +420,7 @@ class Process(object):
         patch_address, old_data = self.patches[patch_name]
         patch_size = len(old_data)
         patch_instructions = self.read(patch_address, patch_size)
-        old_protect = self.protect(patch_address, patch_size, winnt_constants.PAGE_EXECUTE_READWRITE)
+        old_protect = self.protect(patch_address, patch_size, winnt.PAGE_EXECUTE_READWRITE)
         self.write(patch_address, old_data)
         self.protect(patch_address, patch_size, old_protect)
         self.flush_instr_cache(patch_address, patch_size)
@@ -438,7 +438,7 @@ class Process(object):
             instr_data = self.read(hook_address, 30)
             instr_length = self.dsm.get_instr_length(instr_data, hook_address, 5)
             nop_instr = b'\x90' * (instr_length - 5)
-            old_protect = self.protect(hook_address, instr_length, winnt_constants.PAGE_EXECUTE_READWRITE)
+            old_protect = self.protect(hook_address, instr_length, winnt.PAGE_EXECUTE_READWRITE)
             hook_relative = target_address - hook_address - 5
             hook_inject = b'\xE9' + struct.pack("i", hook_relative) + nop_instr
             old_bytes = self.read(hook_address, instr_length)
@@ -452,7 +452,7 @@ class Process(object):
             instr_data = self.read(hook_address, 30)
             instr_length = self.dsm.get_instr_length(instr_data, hook_address, 14)
             nop_instr = b'\x90' * (instr_length - 14)
-            old_protect = self.protect(hook_address, instr_length, winnt_constants.PAGE_EXECUTE_READWRITE)
+            old_protect = self.protect(hook_address, instr_length, winnt.PAGE_EXECUTE_READWRITE)
             hook_inject = b'\xFF\x25\x00\x00\x00\x00' + \
                           struct.pack("Q", target_address) + nop_instr
             old_bytes = self.read(hook_address, instr_length)
@@ -494,7 +494,7 @@ class Process(object):
         hook_size = len(old_bytes)
         hook_instructions = self.read(hook_address, hook_size)
         self.suspend()
-        old_protect = self.protect(hook_address, hook_size, winnt_constants.PAGE_EXECUTE_READWRITE)
+        old_protect = self.protect(hook_address, hook_size, winnt.PAGE_EXECUTE_READWRITE)
         self.write(hook_address, old_bytes)
         self.flush_instr_cache(hook_address, hook_size)
         self.protect(hook_address, hook_size, old_protect)
@@ -659,14 +659,14 @@ def start(app_name: str, command_line: str) -> Process:
 
 def start_suspended(app_name: str, command_line: str) -> Process:
     """Start a process in suspended state"""
-    process_id = kernel32.CreateProcess(app_name, command_line, winnt_constants.CREATE_SUSPENDED)
+    process_id = kernel32.CreateProcess(app_name, command_line, winnt.CREATE_SUSPENDED)
     return Process(process_id)
 
 
 def yield_processes() -> iter:
     """Get all running processes via snapshot, returns generator object"""
     h_snapshot = kernel32.CreateToolhelp32Snapshot(
-        winnt_constants.TH32CS_SNAPPROCESS, 0)
+        winnt.TH32CS_SNAPPROCESS, 0)
     proc_entry = kernel32.Process32First(h_snapshot)
     yield proc_entry
     while kernel32.Process32Next(h_snapshot, proc_entry):
@@ -686,7 +686,7 @@ def get_processes(process_name: str) -> list:
     process_list = []
     process_name = process_name.lower()
     h_snapshot = kernel32.CreateToolhelp32Snapshot(
-        winnt_constants.TH32CS_SNAPPROCESS, 0)
+        winnt.TH32CS_SNAPPROCESS, 0)
     proc_entry = kernel32.Process32First(h_snapshot)
     while kernel32.Process32Next(h_snapshot, proc_entry):
         name = proc_entry.name.lower()
