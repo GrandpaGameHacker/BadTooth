@@ -406,20 +406,25 @@ class Process(object):
         """Flushes the CPU instruction cache at specified location"""
         return kernel32.FlushInstructionCache(self.handle, address, size)
 
-    def add_patch(self, patch_name: str, address: int, instructions: Union[bytes, bytearray]):
+    def add_patch(self, patch_name: str, address: int, assembly_code: Union[bytes, bytearray]):
         """
+        Adds a patch to the patches list, applies patch to the process
+        The patch is registered with a dictionary Process.patches
+        using the supplied patch_name
+        Use Process.toggle_patch(patch_name) to enable or disable the patch
+
         @param patch_name: name of the patch to create
         @param address: address to patch
-        @param instructions: raw machine code bytes or a string of instructions separated with ';'
-        Adds a patch to the patches list, applies patch to the process
+        @param assembly_code: raw machine code bytes or a string of instructions separated with ';'
 
-        The patch is registered with a dictionary Process.patches
-        using the supplied patch_name argument
-
-        Use Process.toggle_patch(patch_name) to enable or disable the patch
         """
-        old_data = self.read(address, len(instructions))
-        self.write(address, instructions)
+        injected_code = b''
+        if type(assembly_code) == str:
+            injected_code = self.asm.assemble(assembly_code)
+        elif type(assembly_code) == bytes or type(assembly_code) == bytearray:
+            injected_code = assembly_code
+        old_data = self.read(address, len(injected_code))
+        self.write(address, injected_code)
         self.patches[patch_name] = (address, old_data)
 
     def toggle_patch(self, patch_name: str):
