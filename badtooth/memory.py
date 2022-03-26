@@ -14,25 +14,12 @@ pefile.fast_load = False
 
 global_use_suspend_process = True
 
-class Process(object):
-    """
-    class Process(object)
-     | Process(process_id) -> Process
-     | 
-     | Create a new process object which opens a handle
-     | to the process specified by process_id
-     | Process will automatically close the handle upon destruction.
-    """
 
+class Process(object):
     def __init__(self, process):
         """
-        Process(process) -> Process
-        process can either be a process id or a process name (gets first entry)
-        internal variables:
-        process_id - ID of target process
-        handle - handle to target process
-        patches - dictionary of all loaded patches
-        hooks - dictionary of all loaded hooks
+        To see if attaching was successful check Process.failed : bool
+        @param process: can either be a process id or a process name (gets the first match)
         """
         if type(process) == int:
             self.process_id = process
@@ -58,13 +45,13 @@ class Process(object):
         self.dsm = Dsm(self.mode)
 
     def __del__(self):
-        """
-        Calls Kernel32.dll->CloseHandle(self.handle) upon destruction
-        """
         if 'handle' in dir(self):
             kernel32.CloseHandle(self.handle)
 
     def is_alive(self) -> bool:
+        """
+        @return bool - if the process is running it will return True:
+        """
         alive = kernel32.WaitForSingleObject(self.handle, 0)
         if alive == winnt.WAIT_TIMEOUT:
             return True
@@ -72,35 +59,54 @@ class Process(object):
             return False
 
     def kill(self, exit_code: int) -> bool:
+        """
+        Kills the target process
+        @param exit_code: exit code reason for termination
+        @return bool - if process was terminated return True:
+        """
         return kernel32.TerminateProcess(self.handle, exit_code)
 
     def is_32bit(self) -> bool:
         """
         Checks whether target process is running under 32bit mode or 64bit mode
         To elaborate, it checks whether its running under Wow64.
-        Returns True if process is 32bit, false if it is 64bit
-
-        Process.is_32bit() -> result: bool
+        @return bool - returns True if 32bit, otherwise its 64bit
         """
         return kernel32.IsWow64Process(self.handle)
 
     def address(self, address: int, c_type):
-        """Create an Address object"""
+        """
+        Creates an Address object using the
+        process handle from this process object.
+
+        @param address: address of the value
+        @param c_type: the ctype of the value
+        @return Address:
+
+        """
         return Address(self, address, c_type)
 
     def pointer(self, base_address: int, offsets: list, c_type):
+        """
+        Creates a Pointer object using the
+        process handle from this process object.
+
+        @param base_address: base address of pointer
+        @param offsets: a list of offsets to get to the final address
+        @param c_type: the ctype of the value being pointed to
+        @return: badtooth.Pointer
+
+        """
         return Pointer(self, base_address, offsets, c_type)
 
     def read(self, address: int, n_bytes: int) -> bytearray:
         """
-        Read specified bytes from the target process
-
-        Process.read(address, n_bytes) -> buffer: bytearray
-
-        address is the address in the process memory to read from
-        n_bytes is the number of bytes to be read
         If the badtooth api fails it can partially fail and return less bytes than intended.
         Will fail if memory range crosses into a PAGE_NOACCESS memory region etc.
+
+        @param address: address to read from
+        @param n_bytes: number of bytes to read
+        Read specified bytes from the target process
         """
         return kernel32.ReadProcessMemory(self.handle, address, n_bytes)
 
@@ -111,8 +117,9 @@ class Process(object):
     def read_string(self, address: int, max_length=0) -> str:
         """
         Read an ASCII string from target process
+        @param address: address of string to read
+        @param max_length: maximum string length
 
-        Process.read_string(address) -> string: str
         """
         string = ""
         i = 0
@@ -446,15 +453,6 @@ class Process(object):
             old_protect = self.protect(hook_address, instr_length, winnt.PAGE_EXECUTE_READWRITE)
             hook_relative = target_address - hook_address - 5
             hook_inject = b'\xE9' + struct.pack("i", hook_relative) + nop_instr
-            old_bytes = self.read(hook_address, instr_length)
-            if global_use_suspend_process:
-                self.suspend()
-            self.write(hook_address, hook_inject)
-            self.flush_instr_cache(hook_address, instr_length)
-            self.protect(hook_address, instr_length, old_protect)
-            if global_use_suspend_process:
-                self.resume()
-            return old_bytes
         else:
             instr_data = self.read(hook_address, 30)
             instr_length = self.dsm.get_instr_length(instr_data, hook_address, 14)
@@ -462,15 +460,15 @@ class Process(object):
             old_protect = self.protect(hook_address, instr_length, winnt.PAGE_EXECUTE_READWRITE)
             hook_inject = b'\xFF\x25\x00\x00\x00\x00' + \
                           struct.pack("Q", target_address) + nop_instr
-            old_bytes = self.read(hook_address, instr_length)
-            if global_use_suspend_process:
-                self.suspend()
-            self.write(hook_address, hook_inject)
-            self.flush_instr_cache(hook_address, instr_length)
-            self.protect(hook_address, instr_length, old_protect)
-            if global_use_suspend_process:
-                self.resume()
-            return old_bytes
+        old_bytes = self.read(hook_address, instr_length)
+        if global_use_suspend_process:
+            self.suspend()
+        self.write(hook_address, hook_inject)
+        self.flush_instr_cache(hook_address, instr_length)
+        self.protect(hook_address, instr_length, old_protect)
+        if global_use_suspend_process:
+            self.resume()
+        return old_bytes
 
     def add_hook(self, hook_name: str, hook_address: int, assembly_code: Union[str, bytes]):
         """
@@ -495,7 +493,6 @@ class Process(object):
         old_bytes = self.detour_hook(
             target_address, hook_address)
         self.hooks[hook_name] = (hook_address, old_bytes, target_address, True)
-
 
     def toggle_hook(self, hook_name: str):
         """
@@ -547,7 +544,7 @@ class Process(object):
             ct = ctypes.c_uint32
         else:
             ct = ctypes.c_uint64
-        fptr = self.address(p_virtual_table + (index*ctypes.sizeof(ct)), ct)
+        fptr = self.address(p_virtual_table + (index * ctypes.sizeof(ct)), ct)
         old_protect = self.protect(p_virtual_table, 512, winnt.PAGE_READWRITE)
         original_function = fptr.read()
         fptr.write(target_address)
@@ -555,6 +552,11 @@ class Process(object):
         self.vt_hooks[hook_name] = (fptr, original_function, target_address, True)
 
     def toggle_vt_hook(self, hook_name):
+        """
+        @param hook_name: name of the installed virtual function hook to toggle
+        Toggles a hook on or off
+        Does not free the allocated memory for the injected code
+        """
         fptr, original_function, target_address, enabled = self.vt_hooks[hook_name]
         old_protect = self.protect(fptr.address, 512, winnt.PAGE_READWRITE)
         if enabled:
@@ -565,6 +567,11 @@ class Process(object):
         self.vt_hooks[hook_name] = (fptr, original_function, target_address, not enabled)
 
     def remove_vt_hook(self, hook_name):
+        """
+        @param hook_name: name of the installed hook to remove
+        Disables a virtual function hook and removes it from the list
+        Frees the allocated memory for the injected code
+        """
         fptr, original_function, target_address, enabled = self.vt_hooks[hook_name]
         old_protect = self.protect(fptr.address, 512, winnt.PAGE_READWRITE)
         fptr.write(original_function.value)
