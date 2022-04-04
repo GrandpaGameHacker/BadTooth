@@ -6,12 +6,12 @@ with open("README.md", "r") as fh:
 setuptools.setup(
     name="badtooth",
     version="0.0.1",
-    author="Samson PianoFingers",
+    author="GrandpaGameHacker",
     author_email="itsthatguyagain3@gmail.com",
     description="A memory hacking package for windows games.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/samsonpianofingers/BadTooth",
+    url="https://github.com/grandpagamehacker/BadTooth",
     packages=setuptools.find_packages(),
     install_requires=['capstone', 'keystone-engine', 'pefile'],
     classifiers=[

@@ -12,6 +12,7 @@ from typing import Union, Generator, Any
 # by default load the entire PE file
 pefile.fast_load = False
 
+# suspend the process when injecting code
 global_use_suspend_process = True
 
 
