@@ -9,6 +9,7 @@ import ctypes
 import time
 import sys, os
 from typing import Union, Generator, Any
+import threading
 
 # by default load the entire PE file
 pefile.fast_load = False
@@ -328,6 +329,17 @@ class Process(object):
                     dll_import_list[import_entry.name] = import_entry.address + base_address
                 import_list.append((dll_name, dll_import_list))
             return import_list
+
+    def get_readable_memory(self):
+        """
+        gets a list of readable memory regions
+        returns list[MEMORY_BASIC_INFORMATION]
+        can use Process.read_memory to read the pages
+        """
+        return [x for x in self.yield_memory_regions(state=kernel32.MEM_COMMIT,\
+              protect=kernel32.PAGE_EXECUTE_WRITECOPY \
+            | kernel32.PAGE_READONLY | kernel32.PAGE_READWRITE |\
+              kernel32.PAGE_EXECUTE_READ | kernel32.PAGE_EXECUTE_READWRITE)]
 
     def yield_memory_regions(self, min_address: int = None, max_address: int = None, state: int = None,
                              protect: int = None, m_type: int = None) -> \
@@ -716,6 +728,10 @@ class Address(object):
             self.address = address
             self.size = ctypes.sizeof(c_type)
             self.c_type = c_type
+            self.freeze_thread = None
+            self.freeze_value = None
+            self.freeze_timer = 0.01
+            self.frozen = False
 
     def read(self):
         """
@@ -749,6 +765,29 @@ class Address(object):
         """
         data = bytes(self.c_type(value))
         return kernel32.WriteProcessMemory(self.handle, self.address, data)
+
+    def freeze(self, value: Union[int, float, tuple], interval=0.01):
+        if self.freeze_thread is not None:
+            return
+        self.frozen = True
+        self.freeze_value = value
+        self.freeze_timer = interval
+        self.freeze_thread = threading.Thread(target=self.freeze_function)
+        self.freeze_thread.start()
+    
+    def unfreeze(self):
+        self.frozen = False
+        self.freeze_thread.join()
+        self.freeze_thread = None
+
+    def freeze_function(self):
+        while self.frozen:
+            if self.write(self.freeze_value) is None:
+                self.frozen = False
+                print("Error, Frozen memory address deallocated (process crash??)")
+                print(f"killing freeze address  {hex(self.address)}")
+            time.sleep(self.freeze_timer)
+
 
 
 class Pointer(Address):
@@ -785,6 +824,33 @@ class Pointer(Address):
             address += offset
         self.address = address
         return True
+
+    def freeze(self, value: Union[int, float, tuple], interval=0.01):
+        if self.freeze_thread is not None:
+            return
+        self.frozen = True
+        self.freeze_value = value
+        self.freeze_timer = interval
+        self.freeze_thread = threading.Thread(target=self.freeze_function)
+        self.freeze_thread.start()
+    
+    def unfreeze(self):
+        self.frozen = False
+        self.freeze_thread.join()
+        self.freeze_thread = None
+
+    def freeze_function(self):
+        while self.frozen:
+            if not self.resolve():
+                self.frozen = False
+                print("Error, Frozen pointer address invalid")
+                print(f"killing freeze pointer {hex(self.base_address), hex(self.address)}")
+            if self.write(self.freeze_value) is None:
+                self.frozen = False
+                print("Error, Frozen memory address for pointer deallocated")
+                print(f"killing freeze address {hex(self.address)}")
+            time.sleep(interval)
+
 
 
 def start(app_name: str, command_line: str) -> Process:
