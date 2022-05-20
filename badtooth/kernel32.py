@@ -227,7 +227,49 @@ __PeekNamedPipe = kernel32.PeekNamedPipe
 __PeekNamedPipe.argtypes = [HANDLE, LPVOID, DWORD, LPDWORD, LPDWORD, LPDWORD]
 __PeekNamedPipe.restype = BOOL
 
+# sneak these in here for now, create new api folder later
+psapi = WinDLL("psapi", use_last_error=True)
+# EnumProcessModulesEx(hProcess, *lphModule, cb, lpcbNeeded, dwFilterFlag );
+__EnumProcessModulesEx = psapi.EnumProcessModulesEx
+__EnumProcessModulesEx.argtypes = [
+    HANDLE, POINTER(c_size_t), DWORD, LPDWORD, DWORD]
+__EnumProcessModulesEx.restype = BOOL
+
+# GetModuleBaseNameA(hProcess, hModule, lpBaseName, nSize );
+__GetModuleBaseNameA = psapi.GetModuleBaseNameA
+__GetModuleBaseNameA.argtypes = [HANDLE, HMODULE, LPSTR, DWORD]
+__GetModuleBaseNameA.restype = DWORD
+
+# GetModuleInformation(hProcess, hModule, lpmodinfo, cb );
+__GetModuleInformation = psapi.GetModuleInformation
+__GetModuleInformation.argtypes = [HANDLE, HMODULE, POINTER(MODULEINFO), DWORD]
+__GetModuleInformation.restype = BOOL
+
 # external api
+
+
+def EnumProcessModulesEx(hProcess, filterFlag=winnt.LIST_MODULES_ALL):
+    buffer = create_string_buffer(256 * 4)
+    hModArray = cast(buffer, POINTER(c_size_t))
+    output_bytes = DWORD()
+    __EnumProcessModulesEx(hProcess, hModArray, sizeof(
+        c_size_t) * 256, byref(output_bytes), filterFlag)
+    print(f"Got {output_bytes} bytes modules")
+    return hModArray
+
+
+def GetModuleBaseNameA(hProcess, hModule):
+    buffer = create_string_buffer(512)
+    p_buf = cast(buffer, LPSTR)
+    __GetModuleBaseNameA(hProcess, hModule, p_buf, 512)
+    return p_buf.value
+
+
+def GetModuleInformation(hProcess, hModule):
+    mod_info = MODULEINFO()
+    __GetModuleInformation(hProcess, hModule, byref(
+        mod_info), sizeof(MODULEINFO))
+    return mod_info
 
 
 def GetSystemInfo():
@@ -419,6 +461,7 @@ def CreateRemoteThreadEx(process_handle, start_address,
         report_last_error()
     else:
         return handle
+
 
 def GetExitCodeThread(hThread):
     exit_code = DWORD(0)

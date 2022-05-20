@@ -1,10 +1,12 @@
 """Intended to help generate ctypes function definitions from Windows API definitions"""
-dll_name = "kernel32"
+dll_name = "psapi"
 
 function_to_convert = """
-BOOL GetExitCodeThread(
-  HANDLE  hThread,
-  LPDWORD lpExitCode
+BOOL GetModuleInformation(
+  HANDLE       hProcess,
+  HMODULE      hModule,
+  LPMODULEINFO lpmodinfo,
+  DWORD        cb
 );
 """
 

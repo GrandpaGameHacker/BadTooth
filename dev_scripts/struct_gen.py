@@ -1,11 +1,11 @@
 """Intended to help generate ctypes structs from Windows API Structures"""
 
 struct_data = """
-typedef struct _SECURITY_ATTRIBUTES {
-  DWORD  nLength;
-  LPVOID lpSecurityDescriptor;
-  BOOL   bInheritHandle;
-} SECURITY_ATTRIBUTES, *PSECURITY_ATTRIBUTES, *LPSECURITY_ATTRIBUTES;
+typedef struct _MODULEINFO {
+  LPVOID lpBaseOfDll;
+  DWORD  SizeOfImage;
+  LPVOID EntryPoint;
+} MODULEINFO, *LPMODULEINFO;
 """
 
 def convert_struct(struct_s):

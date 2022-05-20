@@ -5,6 +5,26 @@ from .winnt import *
 QWORD = c_longlong
 
 
+class MODULEINFO(Structure):
+    _fields_ = [
+        ("lpBaseOfDll", LPVOID),
+        ("SizeOfImage", DWORD),
+        ("EntryPoint", LPVOID)
+    ]
+
+    @property
+    def base_address(self):
+        return self.lpBaseOfDll
+
+    @property
+    def size(self):
+        return self.SizeOfImage
+
+    @property
+    def end_address(self):
+        return self.SizeOfImage + self.lpBaseOfDll
+
+
 class SYSTEM_INFO(Structure):
     _fields_ = [
         ("dwOemId", DWORD),

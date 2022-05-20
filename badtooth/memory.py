@@ -7,6 +7,7 @@ import pefile
 import struct
 import ctypes
 import time
+import sys
 from typing import Union, Generator, Any
 
 # by default load the entire PE file
@@ -14,6 +15,7 @@ pefile.fast_load = False
 
 # suspend the process when injecting code
 global_use_suspend_process = True
+global_python_is_32bit = sys.maxsize == 2**32 - 1
 
 
 class Process(object):
@@ -140,7 +142,8 @@ class Process(object):
         """
         Read a structure from process into a local ctypes instance
         """
-        data = bytes(kernel32.ReadProcessMemory(self.handle, address, ctypes.sizeof(structure)))
+        data = bytes(kernel32.ReadProcessMemory(
+            self.handle, address, ctypes.sizeof(structure)))
         data = ctypes.c_buffer(data)
         fit = min(len(data), ctypes.sizeof(structure))
         ctypes.memmove(ctypes.addressof(structure), data, fit)
@@ -278,6 +281,10 @@ class Process(object):
         """
         module = self.get_module(module_name)
         data = self.read(module.base_address, module.size)
+        return pefile.PE(data=data)
+
+    def get_pe_info_from_memory_direct(self, module_base, size):
+        data = self.read(module_base, size)
         return pefile.PE(data=data)
 
     def get_exports(self, module_name: str):
@@ -438,7 +445,8 @@ class Process(object):
         patch_address, old_data = self.patches[patch_name]
         patch_size = len(old_data)
         patch_instructions = self.read(patch_address, patch_size)
-        old_protect = self.protect(patch_address, patch_size, winnt.PAGE_EXECUTE_READWRITE)
+        old_protect = self.protect(
+            patch_address, patch_size, winnt.PAGE_EXECUTE_READWRITE)
         self.write(patch_address, old_data)
         self.protect(patch_address, patch_size, old_protect)
         self.flush_instr_cache(patch_address, patch_size)
@@ -454,16 +462,20 @@ class Process(object):
         """
         if self.mode:
             instr_data = self.read(hook_address, 30)
-            instr_length = self.dsm.get_instr_length(instr_data, hook_address, 5)
+            instr_length = self.dsm.get_instr_length(
+                instr_data, hook_address, 5)
             nop_instr = b'\x90' * (instr_length - 5)
-            old_protect = self.protect(hook_address, instr_length, winnt.PAGE_EXECUTE_READWRITE)
+            old_protect = self.protect(
+                hook_address, instr_length, winnt.PAGE_EXECUTE_READWRITE)
             hook_relative = target_address - hook_address - 5
             hook_inject = b'\xE9' + struct.pack("i", hook_relative) + nop_instr
         else:
             instr_data = self.read(hook_address, 30)
-            instr_length = self.dsm.get_instr_length(instr_data, hook_address, 14)
+            instr_length = self.dsm.get_instr_length(
+                instr_data, hook_address, 14)
             nop_instr = b'\x90' * (instr_length - 14)
-            old_protect = self.protect(hook_address, instr_length, winnt.PAGE_EXECUTE_READWRITE)
+            old_protect = self.protect(
+                hook_address, instr_length, winnt.PAGE_EXECUTE_READWRITE)
             hook_inject = b'\xFF\x25\x00\x00\x00\x00' + \
                           struct.pack("Q", target_address) + nop_instr
         old_bytes = self.read(hook_address, instr_length)
@@ -490,7 +502,8 @@ class Process(object):
             injected_code = assembly_code
         target_address = self.alloc_rwx(len(injected_code))
         if self.mode:
-            hook_relative = hook_address - (target_address + len(injected_code))
+            hook_relative = hook_address - \
+                (target_address + len(injected_code))
             injected_code += b'\xE9' + struct.pack("i", hook_relative)
         else:
             injected_code += b'\xFF\x25\x00\x00\x00\x00'
@@ -511,13 +524,15 @@ class Process(object):
         hook_instructions = self.read(hook_address, hook_size)
         if global_use_suspend_process:
             self.suspend()
-        old_protect = self.protect(hook_address, hook_size, winnt.PAGE_EXECUTE_READWRITE)
+        old_protect = self.protect(
+            hook_address, hook_size, winnt.PAGE_EXECUTE_READWRITE)
         self.write(hook_address, old_bytes)
         self.flush_instr_cache(hook_address, hook_size)
         self.protect(hook_address, hook_size, old_protect)
         if global_use_suspend_process:
             self.resume()
-        self.hooks[hook_name] = (hook_address, hook_instructions, target_address, not enabled)
+        self.hooks[hook_name] = (
+            hook_address, hook_instructions, target_address, not enabled)
 
     def remove_hook(self, hook_name: str):
         """
@@ -555,7 +570,8 @@ class Process(object):
         original_function = fptr.read()
         fptr.write(target_address)
         self.protect(p_virtual_table, 512, old_protect)
-        self.vt_hooks[hook_name] = (fptr, original_function, target_address, True)
+        self.vt_hooks[hook_name] = (
+            fptr, original_function, target_address, True)
 
     def toggle_vt_hook(self, hook_name):
         """
@@ -570,7 +586,8 @@ class Process(object):
         else:
             fptr.write(target_address)
         self.protect(fptr.address, 512, old_protect)
-        self.vt_hooks[hook_name] = (fptr, original_function, target_address, not enabled)
+        self.vt_hooks[hook_name] = (
+            fptr, original_function, target_address, not enabled)
 
     def remove_vt_hook(self, hook_name):
         """
@@ -591,11 +608,39 @@ class Process(object):
         This function uses LoadLibraryA and CreateRemoteThreadEx
         which is very loud. Will not work against most anti-cheats
         """
-        kernel32_handle = kernel32.GetModuleHandle("kernel32.dll")
-        load_lib = kernel32.GetProcAddress(kernel32_handle, "LoadLibraryA")
-        path_internal = self.alloc_rw(len(dll_path))
-        self.write(path_internal, bytes(dll_path, "ASCII"))
-        self.create_thread(load_lib, parameter=path_internal)
+        if(global_python_is_32bit == self.is_32bit()):
+            kernel32_handle = kernel32.GetModuleHandle("kernel32.dll")
+            load_lib = kernel32.GetProcAddress(kernel32_handle, "LoadLibraryA")
+            path_internal = self.alloc_rw(len(dll_path))
+            self.write(path_internal, bytes(dll_path, "ASCII"))
+            self.create_thread(load_lib, parameter=path_internal)
+        else:
+            modules = kernel32.EnumProcessModulesEx(self.handle)
+            dll_name = b""
+            i = 0
+            k32_address = 0
+            while dll_name.find(b"KERNEL32") == -1:
+                dll_name = kernel32.GetModuleBaseNameA(self.handle, modules[i])
+                k32_address = modules[i]
+                i += 1
+            mod_info = kernel32.GetModuleInformation(self.handle, k32_address)
+            export_dict = {}
+            kernel32_path = "C:/Windows/System32/kernel32.dll"
+            if self.is_32bit():
+                kernel32_path = "C:/Windows/SysWOW64/kernel32.dll"
+            pe = pefile.PE(kernel32_path)
+            pe.parse_data_directories()
+            if hasattr(pe, 'DIRECTORY_ENTRY_EXPORT'):
+                for export in pe.DIRECTORY_ENTRY_EXPORT.symbols:
+                    export_address = export.address + mod_info.base_address
+                    if export.name:
+                        export_dict[export.name.decode("ASCII")] = export_address
+                    else:
+                        export_dict[export.ordinal] = export_address
+            load_lib = export_dict["LoadLibraryA"]
+            path_internal = self.alloc_rw(len(dll_path))
+            self.write(path_internal, bytes(dll_path, "ASCII"))
+            self.create_thread(load_lib, parameter=path_internal)
 
 
 class ProcessWatcher(object):
@@ -662,7 +707,8 @@ class Address(object):
         """
         Read a value from this address
         """
-        data = bytes(kernel32.ReadProcessMemory(self.handle, self.address, self.size))
+        data = bytes(kernel32.ReadProcessMemory(
+            self.handle, self.address, self.size))
         if data is None:
             return None
         if len(data) == self.size:
@@ -674,7 +720,8 @@ class Address(object):
         """
         Read a value from this address + offset
         """
-        data = kernel32.ReadProcessMemory(self.handle, self.address + offset, self.size)
+        data = kernel32.ReadProcessMemory(
+            self.handle, self.address + offset, self.size)
         if data is None:
             return None
         if len(data) == self.size:
@@ -702,7 +749,8 @@ class Pointer(Address):
         if not process.failed and process.is_alive():
             super(Pointer, self).__init__(process, 0, c_type)
             self.pointer_size = 4 if process.mode else 8
-            self.c_pointer = ctypes.POINTER(ctypes.c_uint32) if process.mode else ctypes.POINTER(ctypes.c_uint64)
+            self.c_pointer = ctypes.POINTER(
+                ctypes.c_uint32) if process.mode else ctypes.POINTER(ctypes.c_uint64)
             self.base_address = base_address
             self.address = 0
             self.offsets = offsets
@@ -714,7 +762,8 @@ class Pointer(Address):
         """
         address = self.base_address
         for offset in self.offsets:
-            data = bytes(kernel32.ReadProcessMemory(self.handle, address, self.pointer_size))
+            data = bytes(kernel32.ReadProcessMemory(
+                self.handle, address, self.pointer_size))
             if data is None:
                 return False
             data = ctypes.c_buffer(data)
@@ -732,7 +781,8 @@ def start(app_name: str, command_line: str) -> Process:
 
 def start_suspended(app_name: str, command_line: str) -> Process:
     """Start a process in suspended state"""
-    process_id = kernel32.CreateProcess(app_name, command_line, winnt.CREATE_SUSPENDED)
+    process_id = kernel32.CreateProcess(
+        app_name, command_line, winnt.CREATE_SUSPENDED)
     return Process(process_id)
 
 
