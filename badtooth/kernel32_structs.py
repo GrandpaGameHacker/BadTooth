@@ -156,6 +156,10 @@ class MEMORY_BASIC_INFORMATION(Structure):
         ("Type", DWORD)]
 
     @property
+    def allocation_base_address(self):
+        return self.AllocationBase
+
+    @property
     def base_address(self):
         return self.BaseAddress
 

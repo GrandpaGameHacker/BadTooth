@@ -5,10 +5,12 @@ from . import winerror
 from . kernel32_structs import *
 kernel32 = WinDLL("kernel32", use_last_error=True)
 
+print_error_messages = True
+
 
 def report_last_error():
-    print(WinError(get_last_error()))
-
+    if print_error_messages:
+        print(WinError(get_last_error()))
 
 # internal function definitions
 
