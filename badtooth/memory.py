@@ -114,6 +114,11 @@ class Process(object):
         return kernel32.ReadProcessMemory(self.handle, address, n_bytes)
 
     def read_memory(self, region: kernel32.MEMORY_BASIC_INFORMATION) -> Union[bytes, bytearray]:
+        """
+        Read an entire memory page from the process.
+        @param region: a MEMORY_BASIC_INFORMATION structure for the target memory region
+        returns a copy of the memory if successful
+        """
         base, size = region.get_memory_range()
         return self.read(base, size)
 
@@ -607,6 +612,7 @@ class Process(object):
         Injects a dll into the process
         This function uses LoadLibraryA and CreateRemoteThreadEx
         which is very loud. Will not work against most anti-cheats
+        the path must be the full path or be in the target's immediate directories
         """
         if global_python_is_32bit is True and self.is_32bit() is False:
             print("Error, cannot inject 64bit process from 32bit process")
