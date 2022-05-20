@@ -608,39 +608,47 @@ class Process(object):
         This function uses LoadLibraryA and CreateRemoteThreadEx
         which is very loud. Will not work against most anti-cheats
         """
+        if global_python_is_32bit is True and self.is_32bit() is False:
+            print("Error, cannot inject 64bit process from 32bit process")
+            return
+        # if the bits are the same, great!
         if(global_python_is_32bit == self.is_32bit()):
             kernel32_handle = kernel32.GetModuleHandle("kernel32.dll")
             load_lib = kernel32.GetProcAddress(kernel32_handle, "LoadLibraryA")
-            path_internal = self.alloc_rw(len(dll_path))
-            self.write(path_internal, bytes(dll_path, "ASCII"))
-            self.create_thread(load_lib, parameter=path_internal)
         else:
+            # if not then we do it the hard way
             modules = kernel32.EnumProcessModulesEx(self.handle)
+
             dll_name = b""
             i = 0
             k32_address = 0
+
             while dll_name.find(b"KERNEL32") == -1:
                 dll_name = kernel32.GetModuleBaseNameA(self.handle, modules[i])
                 k32_address = modules[i]
                 i += 1
+
             mod_info = kernel32.GetModuleInformation(self.handle, k32_address)
             export_dict = {}
-            kernel32_path = "C:/Windows/System32/kernel32.dll"
-            if self.is_32bit():
-                kernel32_path = "C:/Windows/SysWOW64/kernel32.dll"
+            kernel32_path = "C:/Windows/SysWOW64/kernel32.dll"
+
             pe = pefile.PE(kernel32_path)
             pe.parse_data_directories()
+
             if hasattr(pe, 'DIRECTORY_ENTRY_EXPORT'):
                 for export in pe.DIRECTORY_ENTRY_EXPORT.symbols:
                     export_address = export.address + mod_info.base_address
                     if export.name:
-                        export_dict[export.name.decode("ASCII")] = export_address
+                        export_dict[export.name.decode(
+                            "ASCII")] = export_address
                     else:
                         export_dict[export.ordinal] = export_address
+
             load_lib = export_dict["LoadLibraryA"]
-            path_internal = self.alloc_rw(len(dll_path))
-            self.write(path_internal, bytes(dll_path, "ASCII"))
-            self.create_thread(load_lib, parameter=path_internal)
+        # finally, inject :)
+        path_internal = self.alloc_rw(len(dll_path))
+        self.write(path_internal, bytes(dll_path, "ASCII"))
+        self.create_thread(load_lib, parameter=path_internal)
 
 
 class ProcessWatcher(object):
