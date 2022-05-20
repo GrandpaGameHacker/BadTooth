@@ -7,7 +7,7 @@ import pefile
 import struct
 import ctypes
 import time
-import sys
+import sys, os
 from typing import Union, Generator, Any
 
 # by default load the entire PE file
@@ -630,7 +630,7 @@ class Process(object):
 
             mod_info = kernel32.GetModuleInformation(self.handle, k32_address)
             export_dict = {}
-            kernel32_path = "C:/Windows/SysWOW64/kernel32.dll"
+            kernel32_path = os.environ['SystemRoot'] + "/SysWOW64/kernel32.dll"
 
             pe = pefile.PE(kernel32_path)
             pe.parse_data_directories()
