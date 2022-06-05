@@ -733,6 +733,14 @@ class Address(object):
             self.freeze_timer = 0.01
             self.frozen = False
 
+    def __lshift__(self, other):
+        #override to allow writing via <<
+        return self.write(other)
+
+    def __invert__(self):
+        #override to allow reading into variables via >>
+        return self.read()
+
     def read(self):
         """
         Read a value from this address
@@ -850,6 +858,17 @@ class Pointer(Address):
                 print("Error, Frozen memory address for pointer deallocated")
                 print(f"killing freeze address {hex(self.address)}")
             time.sleep(interval)
+
+
+    def __lshift__(self, other):
+        #override to allow writing via <<
+        self.resolve()
+        return self.write(other)
+
+    def __invert__(self):
+        #override to allow reading into variables via >>
+        self.resolve()
+        return self.read()
 
 
 
