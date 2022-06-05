@@ -7,7 +7,8 @@ import pefile
 import struct
 import ctypes
 import time
-import sys, os
+import sys
+import os
 from typing import Union, Generator, Any
 import threading
 
@@ -23,16 +24,17 @@ class Process(object):
     def __init__(self, process):
         """
         To see if attaching was successful check Process.failed : bool
-        @param process: can either be a process id or a process name (gets the first match)
+        @param process: can either be a process id or a process name
+        (gets the first match)
         """
-        if type(process) == int:
+        if isinstance(process, int):
             self.process_id = process
             self.handle = kernel32.OpenProcess(self.process_id)
             if self.handle != winerror.ERROR_INVALID_HANDLE:
                 self.failed = False
             else:
                 self.failed = True
-        if type(process) == str:
+        if isinstance(process, str):
             proc = get_process_first(process)
             if proc is not None:
                 self.process_id = proc.pid
@@ -105,8 +107,10 @@ class Process(object):
 
     def read(self, address: int, n_bytes: int) -> bytearray:
         """
-        If the badtooth api fails it can partially fail and return less bytes than intended.
-        Will fail if memory range crosses into a PAGE_NOACCESS memory region etc.
+        If the badtooth api fails it can partially fail
+        and return less bytes than intended.
+        Will fail if memory range crosses into
+        a PAGE_NOACCESS memory region etc.
 
         @param address: address to read from
         @param n_bytes: number of bytes to read
@@ -117,7 +121,8 @@ class Process(object):
     def read_memory(self, region: kernel32.MEMORY_BASIC_INFORMATION) -> Union[bytes, bytearray]:
         """
         Read an entire memory page from the process.
-        @param region: a MEMORY_BASIC_INFORMATION structure for the target memory region
+        @param region: a MEMORY_BASIC_INFORMATION
+        structure for the target memory region
         returns a copy of the memory if successful
         """
         base, size = region.get_memory_range()
@@ -176,7 +181,8 @@ class Process(object):
         """
         Sets the memory protection of page(s)
         """
-        return kernel32.VirtualProtectEx(self.handle, address, size, protection)
+        return kernel32.VirtualProtectEx(
+            self.handle, address, size, protection)
 
     def alloc_rwx(self, size: int) -> int:
         """
@@ -336,10 +342,10 @@ class Process(object):
         returns list[MEMORY_BASIC_INFORMATION]
         can use Process.read_memory to read the pages
         """
-        return [x for x in self.yield_memory_regions(state=kernel32.MEM_COMMIT,\
-              protect=kernel32.PAGE_EXECUTE_WRITECOPY \
-            | kernel32.PAGE_READONLY | kernel32.PAGE_READWRITE |\
-              kernel32.PAGE_EXECUTE_READ | kernel32.PAGE_EXECUTE_READWRITE)]
+        return [x for x in self.yield_memory_regions(state=kernel32.MEM_COMMIT,
+                                                     protect=kernel32.PAGE_EXECUTE_WRITECOPY
+                                                     | kernel32.PAGE_READONLY | kernel32.PAGE_READWRITE |
+                                                     kernel32.PAGE_EXECUTE_READ | kernel32.PAGE_EXECUTE_READWRITE)]
 
     def yield_memory_regions(self, min_address: int = None, max_address: int = None, state: int = None,
                              protect: int = None, m_type: int = None) -> \
@@ -382,8 +388,8 @@ class Process(object):
             if min_address:
                 b_min_addr = mem_basic_info.BaseAddress >= min_address
             if max_address:
-                b_max_addr = (mem_basic_info.BaseAddress +
-                              mem_basic_info.RegionSize) < max_address
+                b_max_addr = (mem_basic_info.BaseAddress
+                              + mem_basic_info.RegionSize) < max_address
             if state:
                 b_state = mem_basic_info.State == state
             if protect:
@@ -405,8 +411,10 @@ class Process(object):
         """
         @param address: address to start the new thread at
         @param parameter: optional integer parameter for the new thread
-        Creates a thread in the target process at specified address, default parameter is NULL
-        Parameter can be a pointer to some variable for the code that is executed to use.
+        Creates a thread in the target process
+        at specified address, default parameter is NULL
+        Parameter can be a pointer to some
+        variable for the code that is executed to use.
         """
         thread = kernel32.CreateRemoteThreadEx(self.handle, address, parameter)
         self.injected_threads.append(thread)
@@ -431,7 +439,7 @@ class Process(object):
         """Flushes the CPU instruction cache at specified location"""
         return kernel32.FlushInstructionCache(self.handle, address, size)
 
-    def add_patch(self, patch_name: str, address: int, assembly_code: Union[bytes, bytearray]):
+    def add_patch(self, patch_name: str, address: int,assembly_code: Union[bytes, bytearray]):
         """
         Adds a patch to the patches list, applies patch to the process
         The patch is registered with a dictionary Process.patches
@@ -734,11 +742,11 @@ class Address(object):
             self.frozen = False
 
     def __lshift__(self, other):
-        #override to allow writing via <<
+        # override to allow writing via <<
         return self.write(other)
 
     def __invert__(self):
-        #override to allow reading into variables via >>
+        # override to allow reading into variables via >>
         return self.read()
 
     def read(self):
@@ -782,7 +790,7 @@ class Address(object):
         self.freeze_timer = interval
         self.freeze_thread = threading.Thread(target=self.freeze_function)
         self.freeze_thread.start()
-    
+
     def unfreeze(self):
         self.frozen = False
         self.freeze_thread.join()
@@ -795,7 +803,6 @@ class Address(object):
                 print("Error, Frozen memory address deallocated (process crash??)")
                 print(f"killing freeze address  {hex(self.address)}")
             time.sleep(self.freeze_timer)
-
 
 
 class Pointer(Address):
@@ -841,7 +848,7 @@ class Pointer(Address):
         self.freeze_timer = interval
         self.freeze_thread = threading.Thread(target=self.freeze_function)
         self.freeze_thread.start()
-    
+
     def unfreeze(self):
         self.frozen = False
         self.freeze_thread.join()
@@ -852,24 +859,23 @@ class Pointer(Address):
             if not self.resolve():
                 self.frozen = False
                 print("Error, Frozen pointer address invalid")
-                print(f"killing freeze pointer {hex(self.base_address), hex(self.address)}")
+                print(
+                    f"killing freeze pointer {hex(self.base_address), hex(self.address)}")
             if self.write(self.freeze_value) is None:
                 self.frozen = False
                 print("Error, Frozen memory address for pointer deallocated")
                 print(f"killing freeze address {hex(self.address)}")
-            time.sleep(interval)
-
+            time.sleep(self.freeze_timer)
 
     def __lshift__(self, other):
-        #override to allow writing via <<
+        # override to allow writing via <<
         self.resolve()
         return self.write(other)
 
     def __invert__(self):
-        #override to allow reading into variables via >>
+        # override to allow reading into variables via >>
         self.resolve()
         return self.read()
-
 
 
 def start(app_name: str, command_line: str) -> Process:
