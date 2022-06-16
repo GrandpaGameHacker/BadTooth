@@ -170,6 +170,19 @@ class Process(object):
         """
         return kernel32.WriteProcessMemory(self.handle, address, buffer)
 
+    def memset(self, address: int, data: bytes, size: int):
+        """
+        Fill a buffer in the target process with bytes (like memset)
+        """
+        return self.write(address, data * size)
+
+    def memcpy(self, src: int, dst: int, size: int):
+        """
+        Copy memory from one location to another in the target process
+        """
+        memory = self.read(src, size)
+        return self.write(dst, memory)
+
     def write_structure(self, address: int, structure):
         """
         Writes a local ctypes structure instance to process memory
@@ -439,7 +452,7 @@ class Process(object):
         """Flushes the CPU instruction cache at specified location"""
         return kernel32.FlushInstructionCache(self.handle, address, size)
 
-    def add_patch(self, patch_name: str, address: int,assembly_code: Union[bytes, bytearray]):
+    def add_patch(self, patch_name: str, address: int, assembly_code: Union[bytes, bytearray]):
         """
         Adds a patch to the patches list, applies patch to the process
         The patch is registered with a dictionary Process.patches
@@ -707,7 +720,7 @@ class ProcessWatcher(object):
         """
         self.proc.resume()
 
-    def watch_address(self, address: int, size: int) -> bool:
+    def watch_address(self, address: int, size: int, sleep=0.05) -> bool:
         """
         Sleeps the thread until memory region data changes
         Useful for unpacker writing maybe?
@@ -715,7 +728,7 @@ class ProcessWatcher(object):
         original_bytes = self.proc.read(address, size)
         changed = False
         while not changed:
-            time.sleep(0.05)
+            time.sleep(sleep)
             curr_bytes = self.proc.read(address, size)
             if curr_bytes != original_bytes:
                 changed = True
@@ -747,7 +760,7 @@ class Address(object):
 
     def __invert__(self):
         # override to allow reading into variables via >>
-        return self.read()
+        return self.read().value
 
     def read(self):
         """
@@ -875,7 +888,7 @@ class Pointer(Address):
     def __invert__(self):
         # override to allow reading into variables via >>
         self.resolve()
-        return self.read()
+        return self.read().value
 
 
 def start(app_name: str, command_line: str) -> Process:
