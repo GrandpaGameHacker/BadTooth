@@ -1,11 +1,12 @@
 """Intended to help generate ctypes structs from Windows API Structures"""
 
 struct_data = """
-typedef struct _MODULEINFO {
-  LPVOID lpBaseOfDll;
-  DWORD  SizeOfImage;
-  LPVOID EntryPoint;
-} MODULEINFO, *LPMODULEINFO;
+typedef struct _PEB_LDR_DATA {
+    UINT8 _PADDING_[12];
+    LIST_ENTRY InLoadOrderModuleList;
+    LIST_ENTRY InMemoryOrderModuleList;
+    LIST_ENTRY InInitializationOrderModuleList;
+} PEB_LDR_DATA, *PPEB_LDR_DATA;
 """
 
 def convert_struct(struct_s):

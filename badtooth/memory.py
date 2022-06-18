@@ -118,6 +118,20 @@ class Process(object):
         """
         return kernel32.ReadProcessMemory(self.handle, address, n_bytes)
 
+    def read_pointer(self, address):
+        """
+        read a pointer value from process memory,
+        automatically selects 32bit/64bit pointers
+        """
+        ptr_fmt = "Q"
+        ptr_size = 8;
+        if self.is_32bit():
+            ptr_fmt = "I"
+            ptr_size = 4
+        data = self.read(address, ptr_size)
+        return struct.unpack(ptr_fmt, data)[0]
+
+
     def read_memory(self, region: kernel32.MEMORY_BASIC_INFORMATION) -> Union[bytes, bytearray]:
         """
         Read an entire memory page from the process.
@@ -311,6 +325,49 @@ class Process(object):
     def get_pe_info_from_memory_direct(self, module_base, size):
         data = self.read(module_base, size)
         return pefile.PE(data=data)
+
+        def get_peb(self):
+        code = self.alloc_rwx(256)
+        data = self.alloc_rw(8)
+        peb_code =\
+            f"""
+            mov rax, gs:0x60;
+            mov [{hex(data)}], rax;
+            ret;
+            """
+        pointer_type = ctypes.c_uint64
+
+        if self.is_32bit():
+            peb_code =\
+            f"""
+            mov ebx, fs:0x30;
+            mov [{hex(data)}], ebx;
+            ret;
+            """
+            pointer_type = ctypes.c_uint32
+
+        injected_code = self.asm.assemble(peb_code)
+        self.write(code, injected_code)
+        self.create_thread(code)
+        
+        peb_ptr = 0
+        while peb_ptr == 0:
+            peb_ptr = self.read_pointer(data)
+
+        self.free(data)
+        self.free(code)
+        
+        return peb_ptr
+
+    def get_ldr(self, peb=0):
+        if peb == 0:
+            peb = self.get_peb()
+        if self.is_32bit():
+            ldr =  self.read_pointer(peb+12)
+        else:
+            ldr = self.read_pointer(peb+20)
+        return ldr
+
 
     def get_exports(self, module_name: str):
         """

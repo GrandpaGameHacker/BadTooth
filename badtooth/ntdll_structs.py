@@ -5,8 +5,10 @@ from ctypes.wintypes import *
 class LIST_ENTRY(Structure):
     pass
 
+
 class LDR_DATA_TABLE_ENTRY(Structure):
     pass
+
 
 class LDR_LIST_ENTRY_U(Union):
     _fields_ = [
@@ -14,10 +16,12 @@ class LDR_LIST_ENTRY_U(Union):
         ("entry", POINTER(LDR_DATA_TABLE_ENTRY)),
     ]
 
+
 LIST_ENTRY._fields_ = [
     ("Flink", LDR_LIST_ENTRY_U),
     ("Blink", LDR_LIST_ENTRY_U)
 ]
+
 
 class UNICODE_STRING(Structure):
     _fields_ = [
@@ -26,19 +30,21 @@ class UNICODE_STRING(Structure):
         ("Buffer", LPWSTR)
     ]
 
+
 LDR_DATA_TABLE_ENTRY._fields_ = [
-        ("Reserved", LPVOID*2),
-        ("InMemoryOrderLinks", LIST_ENTRY),
-        ("Reserved", LPVOID*2),
-        ("DllBase", LPVOID),
-        ("EntryPoint", LPVOID),
-        ("Reserved3", LPVOID),
-        ("FullDllName", UNICODE_STRING),
-        ("Reserved", BYTE*8),
-        ("Reserved", LPVOID*3),
-        ("Reserved6", LPVOID),
-        ("TimeDateStamp", ULONG)
-    ]
+    ("Reserved", LPVOID * 2),
+    ("InMemoryOrderLinks", LIST_ENTRY),
+    ("Reserved", LPVOID * 2),
+    ("DllBase", LPVOID),
+    ("EntryPoint", LPVOID),
+    ("Reserved3", LPVOID),
+    ("FullDllName", UNICODE_STRING),
+    ("Reserved", BYTE * 8),
+    ("Reserved", LPVOID * 3),
+    ("Reserved6", LPVOID),
+    ("TimeDateStamp", ULONG)
+]
+
 
 class PEB_LDR_DATA(Structure):
     _fields_ = [
@@ -89,37 +95,20 @@ class PEB(Structure):
     ]
 
 
+class PEB_LDR_DATA(Structure):
+    _fields_ = [
+        ("_PADDING", c_ubyte * 12),
+        ("InLoadOrderModuleList", LIST_ENTRY),
+        ("InMemoryOrderModuleList", LIST_ENTRY),
+        ("InInitializationOrderModuleList", LIST_ENTRY)
+    ]
+
+
 class PROCESS_BASIC_INFORMATION(Structure):
     _fields_ = [
         ("Reserved1", LPVOID),
         ("PebBaseAddress", POINTER(PEB)),
-        ("Reserved", LPVOID*2),
+        ("Reserved", LPVOID * 2),
         ("UniqueProcessId", PULONG),
         ("Reserved3", LPVOID)
     ]
-    # def walk_modules(self):
-    #     modules = []
-    #     if not self.PebBaseAddress.contents:
-    #         return None
-    #     peb = self.PebBaseAddress.contents
-    #     if not peb.Ldr.contents:
-    #         return None
-    #     ldr = peb.Ldr.contents
-    #     if not ldr.InMemoryOrderModuleList.contents:
-    #         return None
-    #     mods = ldr.InMemoryOrderModuleList.contents
-    #     if not mods.Flink.entry.contents:
-    #         return None
-    #     current_module = mods.Flink
-    #     while current_module is not None:
-    #         mod_data = current_module.entry.contents
-    #         mod_name = mod_data.FullDllName
-    #         print(mod_name)
-    #         mod_base = mod_data.DllBase
-    #         mod_entry = mod_data.EntryPoint
-    #         modules.append((mod_name, mod_base, mod_entry))
-    #         current_module = current_module.Flink
-    #         if not current_module.Flink.contents:
-    #             current_module = None
-    #     return modules
-
