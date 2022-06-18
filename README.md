@@ -1,5 +1,5 @@
 # BadTooth
-Python Game Cheat Framework
+Pure Python Game Cheat Framework
 
 # Development Goals
 - Interactive shell script system
