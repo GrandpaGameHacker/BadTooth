@@ -326,7 +326,7 @@ class Process(object):
         data = self.read(module_base, size)
         return pefile.PE(data=data)
 
-        def get_peb(self):
+    def get_peb(self):
         code = self.alloc_rwx(256)
         data = self.alloc_rw(8)
         peb_code =\
